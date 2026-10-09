@@ -1,8 +1,12 @@
-# Scoreboard
+# Scoreboard — scoreboard0_2
 
 A portable sports scoreboard for WNBA, NBA, MLB, NFL, college football (FBS), and men's and women's singles at the Australian Open, Roland-Garros, Wimbledon, and US Open.
 
-The complete application is in **index.html**. Its HTML, CSS, and JavaScript are embedded in that one file. There are no package installations, build steps, API keys, accounts, or server dependencies.
+The complete application is in **index.html**. Its HTML, CSS, JavaScript, header logo, and explicit browser icons are embedded in that one file. There are no package installations, build steps, API keys, accounts, or server dependencies.
+
+## Visual update in scoreboard0_2
+
+The header and browser icons use the amber-and-ivory SB stadium-lights monogram, without superimposed numbers. Warm charcoal surfaces, ivory text, and amber interface accents complement the logo. League markers retain distinct colors. Scores, refresh behavior, and sorting are unchanged.
 
 ## Open it on your computer
 
@@ -13,7 +17,7 @@ The browser requests ESPN directly. If a browser or extension blocks requests fr
 ## Put it on GitHub Pages
 
 1. Create a repository, or choose an existing one.
-2. Upload **index.html** and this README to the repository root. Include `.nojekyll` if uploading through Git. Upload the extracted files, not the ZIP or its enclosing folder.
+2. Upload **index.html** and this README to the repository root. Also upload `favicon.ico` for browsers that request it automatically, and `.nojekyll` when possible. The `assets` folder contains optional reusable image exports; the app embeds its required icons. Upload the extracted files, not the ZIP or its enclosing folder.
 3. Open **Settings → Pages**.
 4. Under **Build and deployment**, choose **Deploy from a branch**.
 5. Select your branch (usually `main`) and **/(root)**, then **Save**.
@@ -102,6 +106,8 @@ On October 9, 2026, the six original endpoints accepted requests carrying both a
 
 - `index.html` — the entire editable app. This is the only required application file.
 - `README.md` — setup, usage, data source, and limitations.
+- `favicon.ico` — optional browser fallback with 16, 32, and 48 pixel sizes.
+- `assets/` — reusable PNG exports of the logo, favicons, and touch icon; not required alongside the standalone HTML file.
 - `.nojekyll` — tells GitHub Pages to serve the files without Jekyll processing.
 
 No website has been published to your GitHub account as part of this export.
@@ -111,3 +117,5 @@ No website has been published to your GitHub account as part of this export.
 The inline JavaScript passed syntax checks. Live HTTP checks passed for all six ESPN feeds with local-file and sample GitHub Pages Origin headers. Integration checks using real response fixtures covered sport tabs, score changes, failed refreshes, recovery, hidden-tab pausing, date-change cancellation, and offline messages. Tennis results and tiebreaks were checked against both singles finals of the 2025 US Open.
 
 A full graphical-browser test of a locally opened file or a deployed GitHub Pages copy was not available in the creation environment. The HTTP and simulated-DOM checks do not replace that browser test. The CFB update additionally verified real FBS schedule parsing, sort controls and grouping, all seven comparison rules, regulation/halftime/overtime clocks, missing clocks, zero seconds, and stale/upcoming/completed-game handling.
+
+For scoreboard0_2, embedded icon bytes and export sizes were checked, text contrast was checked against the new surfaces, and the unchanged score logic was verified by comparison with scoreboard0_1. Browser appearance and home-screen icon behavior have not been verified in a graphical browser.
