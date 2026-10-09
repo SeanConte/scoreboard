@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Live WNBA, NBA, MLB, NFL, college football and Grand Slam tennis scores. A portable scoreboard powered by ESPN data.">
+<meta name="theme-color" content="#0c1015">
+<title>Scoreboard | Live sports</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23d8ed68'/%3E%3Cpath d='M23 8H11v8h10v8H9' fill='none' stroke='%230c1015' stroke-width='4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root { --background:#0c1015; --foreground:#f1f3f5; --card:#151b23; --card-foreground:#f1f3f5; --popover:#151b23; --popover-foreground:#f1f3f5; --primary:#d8ed68; --primary-foreground:#0c1015; --secondary:#1d2632; --secondary-foreground:#f1f3f5; --muted:#151b23; --muted-foreground:#a2afbd; --accent:#26313e; --accent-foreground:#f1f3f5; --destructive:#ff9888; --border:#2a3441; --input:#2a3441; --ring:#d8ed68; --radius:.5rem; color-scheme:dark; }
+
+*{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--foreground);font-family:Arial,Helvetica,sans-serif;font-size:16px}button,a,input{-webkit-tap-highlight-color:transparent}button,a,input{outline-offset:4px}button{cursor:pointer}button:disabled{cursor:wait;opacity:.55}a{color:inherit;text-decoration:none}main{max-width:1460px;margin:auto;padding:0 48px} .masthead{display:flex;align-items:center;justify-content:space-between;padding:30px 0;border-bottom:1px solid var(--border)}.brand{display:flex;gap:14px;align-items:center;font-size:21px;font-weight:850;letter-spacing:.08em}.brand-mark{background:var(--primary);color:#0c1015;width:42px;height:42px;display:grid;place-content:center;font-size:29px;font-weight:900;position:relative;letter-spacing:-.1em;border-radius:5px}.brand-mark span{position:absolute;font-size:22px;right:5px;bottom:1px}.brand-sub{display:block;font-size:12px;letter-spacing:.16em;color:#99a4b1;margin-top:5px}.edition{font-size:12px;letter-spacing:.1em;color:#8594a4}.day-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:42px 0 30px}.eyebrow{font-size:12px;letter-spacing:.16em;color:#a7b3c1;margin:0 0 10px}h1{font-size:clamp(28px,3.2vw,46px);line-height:1.15;margin:0;letter-spacing:-.045em;font-weight:750}.heading-period{color:var(--primary)}.live-count{display:flex;align-items:center;gap:8px;color:var(--primary);font-size:16px;white-space:nowrap}.live-count b{font-size:23px}.total-count{color:#9aa7b5;margin-left:6px}.toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:20px}.date-controls,.refresh-controls{display:flex;align-items:center;gap:8px}.date-controls{border:1px solid var(--border);border-radius:7px;padding:3px;background:#11171e}.toolbar button{min-width:36px;height:36px;display:flex;align-items:center;justify-content:center;border:0;background:transparent;color:#c3ced9;border-radius:4px}.toolbar button:hover{background:#24313b;color:#fff}.date-picker{display:flex;align-items:center;gap:9px;padding-left:8px;color:#a2afbd}.date-picker input{background:transparent;border:0;color:#e2e7ed;font-size:14px;width:132px;min-width:0}.toolbar .today-button{padding:0 12px;border-left:1px solid var(--border);border-radius:0;font-size:14px}.refresh-controls{font-size:13px;color:#a2afbd}.sport-tabs[data-slot]{width:100%;height:auto;min-height:54px;justify-content:flex-start;gap:20px;padding:0;border-bottom:1px solid var(--border);border-radius:0;flex-wrap:wrap}.sport-tabs [data-slot=tabs-trigger]{flex:0 0 auto;font-size:15px;height:53px;border-radius:0;padding:0 4px;gap:8px;color:#9ca9b8}.sport-tabs [data-slot=tabs-trigger][data-state=active]{color:#edf2f7}.sport-tabs [data-slot=tabs-trigger]:after{bottom:-1px;background:var(--primary)}.sport-color{width:6px;height:6px;border-radius:1px}.league-section{padding-top:28px}.league-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:14px}.league-heading h2{display:flex;gap:10px;align-items:center;font-size:19px;margin:0;letter-spacing:-.02em}.league-bar{display:block;width:3px;height:18px;background:var(--league-color)}.league-heading>span{font-size:12px;color:#9aa7b5;text-align:right}.games-grid,.loading-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.score-card{background:#151b23;border:1px solid #2a3441;border-radius:8px;overflow:hidden}.live-card{border-top:2px solid var(--primary)}.card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 17px 10px;font-size:12px;min-height:38px}.game-status{font-weight:650;color:#b3bfcc}.live-label{display:flex;align-items:center;gap:6px;color:var(--primary);font-size:14px;white-space:nowrap}.live-dot{width:6px;height:6px;background:var(--primary);border-radius:50%}.card-detail{color:#9ba8b7;text-align:right}.match-title{color:var(--league-color);font-weight:600}.tennis-label{font-size:12px;color:#9ba8b7;padding:0 17px 8px}.sides{padding:3px 17px 13px;display:grid;gap:13px}.side{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:37px}.team-name{display:flex;align-items:center;gap:10px;min-width:0;flex:1}.team-name img{width:32px;height:32px;object-fit:contain;flex-shrink:0}.name{font-size:15px;line-height:1.3;display:block;color:#d6dee6}.winner .name{color:#fff;font-weight:650}.record{display:block;color:#8d9bab;font-size:12px;margin-top:3px}.score{font-family:ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:30px;line-height:1;letter-spacing:-.05em;color:#cbd5df}.winner .score{color:#fff;font-weight:700}.initials{display:grid;place-items:center;flex-shrink:0;background:#253140;border:1px solid #334151;border-radius:50%;font-size:12px;font-weight:700;width:30px;height:30px;color:#cad4de}.sets{display:flex;gap:9px;align-items:center;font-family:ui-monospace,monospace;font-size:19px;font-variant-numeric:tabular-nums;color:#8899a9}.sets>span{min-width:10px;position:relative}.won-set{color:#f2f5f8}.sets sup{font-size:12px;position:absolute;top:-5px;right:-5px}.point{color:var(--primary);border-left:1px solid #39424c;padding-left:6px}.serve{color:var(--primary);font-size:8px;margin-left:6px}.card-bottom{border-top:1px solid #25303b;background:#121820;padding:10px 17px;color:#94a4b3;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:10px}.card-bottom>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.card-bottom a{display:flex;align-items:center;gap:5px;white-space:nowrap}.card-bottom a:hover{color:#fff}.empty-state{display:flex;align-items:center;gap:18px;border:1px dashed #2b3744;border-radius:8px;padding:22px;background:#10161d}.empty-dash{font-family:monospace;color:var(--league-color);font-size:24px}.empty-state p{margin:0 0 5px;font-size:15px;color:#c2cdd8}.empty-state div>span{font-size:13px;color:#90a0b1}.feed-warning,.error-banner{color:#ffc596;background:#302419;border:1px solid #65452c;border-radius:5px;padding:12px 15px;display:flex;align-items:center;gap:10px;margin:10px 0;font-size:14px}.feed-warning svg,.error-banner svg{flex-shrink:0}.warning-text{color:#ffc596}.loading-grid{padding-top:28px}.loading-card{height:180px;background:#1a2430}footer{display:flex;justify-content:space-between;gap:20px;border-top:1px solid var(--border);padding:24px 0 32px;margin-top:38px;font-size:12px;line-height:1.7;color:#9aa9b7}footer span:last-child{text-align:right}.spin{animation:spin 1.5s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+@media(min-width:1600px){main{max-width:1550px}.games-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:1100px){.games-grid,.loading-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.edition{display:none}main{padding:0 28px}.sport-tabs[data-slot]{gap:13px}}@media(max-width:650px){main{padding:0 18px}.masthead{padding:22px 0}.brand{font-size:18px}.day-heading{padding:28px 0 22px;display:block}.live-count{margin-top:17px}.toolbar{align-items:flex-start;flex-wrap:wrap}.refresh-controls{width:100%;justify-content:space-between;padding-left:4px}.sport-tabs[data-slot]{gap:2px 15px}.sport-tabs [data-slot=tabs-trigger]{height:43px;font-size:14px}.games-grid,.loading-grid{grid-template-columns:1fr}.league-heading{align-items:flex-start}.league-heading>span{max-width:165px;line-height:1.5}.league-heading h2{font-size:18px}.league-section{padding-top:24px}.score-card .name{font-size:16px}.score{font-size:31px}.sets{font-size:20px}footer{flex-direction:column;gap:5px}footer span:last-child{text-align:left}.date-controls{gap:0}.date-picker{gap:5px}.toolbar .today-button{padding:0 9px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* Plain HTML layout: no framework or stylesheets required. */
+[hidden]{display:none!important}.sport-tabs{display:flex;align-items:center;flex-wrap:wrap}.sport-tabs button{position:relative;display:inline-flex;align-items:center;background:transparent;border:0;cursor:pointer;font-family:inherit;white-space:nowrap}.sport-tabs button[data-state=active]{box-shadow:inset 0 -2px var(--primary)}.team-badge{position:relative;display:block;flex:0 0 32px;width:32px;height:32px}.team-badge img{position:absolute;inset:0;background:#151b23}.team-badge .initials{width:32px;height:32px}.toolbar #previous,.toolbar #next{font-size:30px;line-height:1}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}button:focus-visible,a:focus-visible,input:focus-visible,[role=tabpanel]:focus-visible{outline:2px solid var(--primary);outline-offset:4px}.name{overflow-wrap:anywhere}.sets{flex-shrink:0}.card-top{flex-wrap:wrap}.date-picker{padding-right:5px}.loading-state{min-height:120px}.sport-tabs[data-slot]{padding-top:4px}.sport-tabs button[data-state=active]{color:#fff}.live-count>.live-dot{width:8px;height:8px}.feed-warning{line-height:1.5}.score{min-width:2ch;text-align:right}.game-status{line-height:1.4}@media(max-width:360px){main{padding:0 12px}.sets{gap:6px;font-size:18px}.team-name{gap:6px}.score-card .name{font-size:14px}.sides{padding-left:12px;padding-right:12px}.date-picker input{width:124px}}
+
+
+.sort-toolbar{display:flex;gap:18px;flex-wrap:wrap;align-items:center;padding:18px 0 8px}.sort-choice{display:flex;align-items:center;gap:9px;font-size:14px}.sort-choice select{font:inherit;color:var(--foreground);background:#151b23;border:1px solid #394654;border-radius:5px;min-height:40px;padding:8px 30px 8px 10px;max-width:100%}.group-choice{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}.group-choice input{accent-color:#d8ed68;width:17px;height:17px}#sort-scope{color:#a2afbd;font-size:13px}.sort-help{font-size:13px;line-height:1.6;color:#a2afbd;margin:3px 0 0;max-width:850px}.sort-help summary{cursor:pointer;width:fit-content}.sort-help p{margin:8px 0}.game-meta{padding:12px 17px 0;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:#9aa9b7}.league-tag{color:var(--league-color);font-weight:700;letter-spacing:.04em}.game-metrics{padding:0 17px 12px;color:#aebfce;font-size:12px;line-height:1.5;font-variant-numeric:tabular-nums}.loading-summary{color:#a2afbd;font-size:14px}.sort-choice select:focus-visible{outline:2px solid var(--primary);outline-offset:3px}@media(max-width:650px){.sort-toolbar{gap:12px}.sort-choice{max-width:100%}#sort-scope{flex-basis:100%}.sort-help{margin-top:4px}.sport-tabs[data-slot]{gap:2px 12px}}
+</style>
+</head>
+<body>
+<main>
+<header class="masthead"><a class="brand" href="./index.html" aria-label="Scoreboard home"><span class="brand-mark" aria-hidden="true">S<span>•</span></span><span>SCOREBOARD</span></a><span class="edition">WNBA / NBA / MLB / NFL / CFB / TENNIS</span></header>
+<section class="day-heading"><div><p class="eyebrow" id="eyebrow">TODAY’S SCOREBOARD</p><h1><span id="day-heading">Today</span><span class="heading-period">.</span></h1></div><div class="live-count"><span class="live-dot" aria-hidden="true"></span><b id="live-count">0</b> live <span class="total-count" id="event-count">/ loading</span></div></section>
+<div class="toolbar"><div class="date-controls"><button id="previous" type="button" aria-label="Previous day">‹</button><label class="date-picker"><input id="date" type="date" min="1900-01-02" max="2100-12-30" aria-label="Scoreboard date"></label><button id="next" type="button" aria-label="Next day">›</button><button id="today" class="today-button" type="button">Today</button></div><div class="refresh-controls"><span id="refresh-status">Connecting…</span><button id="refresh" type="button" aria-label="Refresh scores"><svg id="refresh-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L3 9m0-6v6h6M4 13a8 8 0 0 0 14 5l3-3m0 6v-6h-6"/></svg></button></div></div>
+<nav class="sport-tabs" data-slot="tabs-list" role="tablist" aria-label="Sports" id="sport-tabs"></nav>
+<div class="sort-toolbar"><label class="sort-choice" for="sort">Sort <select id="sort" aria-describedby="sort-scope sort-description"></select></label><label class="group-choice"><input type="checkbox" id="group-sports" checked> Group by sport</label><span id="sort-scope"></span></div>
+<details class="sort-help"><summary>How sorting works</summary><p id="sort-description"></p><p>Score and clock sorts prioritize live games. Clock-based sorts place MLB, tennis, untimed CFB overtime, and missing clocks after games with usable clocks. Future overtime is unknown; ratios use a one-second minimum. For metric sorts, stale scores sort last. Start-time sorting uses ESPN’s listed start time.</p></details>
+<div id="connection-warning" class="error-banner" role="status" hidden></div>
+<div id="scores-panel" role="tabpanel" aria-labelledby="tab-all" tabindex="0"></div>
+<div class="sr-only" id="announcer" role="status" aria-live="polite"></div>
+<noscript><div class="error-banner">Enable JavaScript to load live scores.</div></noscript>
+<footer><span id="timezone"></span><span>ESPN data · Checks every 30 seconds while visible.<br>Feed delays and interruptions are possible.</span></footer>
+</main>
+<script>
+'use strict';
+const SPORTS = [
+    { id: 'wnba', name: 'WNBA', path: 'basketball/wnba', color: '#ff8756' },
+    { id: 'nba', name: 'NBA', path: 'basketball/nba', color: '#79a8ff' },
+    { id: 'mlb', name: 'MLB', path: 'baseball/mlb', color: '#70d8c2' },
+    { id: 'nfl', name: 'NFL', path: 'football/nfl', color: '#cf9cff' },
+    { id: 'cfb', name: 'CFB', path: 'football/college-football', color: '#ffbf69' },
+    { id: 'tennis', name: 'Grand Slams', path: 'tennis/atp', color: '#d8ed68' },
+];
+function dateInZone(date, zone) { const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(date)); return ['year', 'month', 'day'].map(k => parts.find(p => p.type === k)?.value).join('-'); }
+function val(s) { return s == null ? '—' : typeof s === 'object' ? String(s.displayValue ?? s.value ?? '—') : String(s); }
+function safeLink(url) { try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && (u.hostname === 'www.espn.com' || u.hostname === 'espn.com') ? u.href : undefined;
+}
+catch {
+    return undefined;
+} }
+function normalize(data, league, day, zone, tour) {
+    if (!Array.isArray(data.events))
+        throw new Error('Invalid scoreboard response');
+    const games = [];
+    for (const e of data.events) {
+        const tennis = league === 'tennis';
+        if (tennis && !/australian open|french open|roland.garros|wimbledon|\bu\.?s\.? open\b/i.test(e.name ?? ''))
+            continue;
+        const groups = tennis ? (e.groupings ?? []) : [{ grouping: {}, competitions: e.competitions ?? [] }];
+        for (const g of groups) {
+            if (tennis && g.grouping?.slug !== (tour === 'wta' ? 'womens-singles' : 'mens-singles'))
+                continue;
+            for (const c of g.competitions ?? []) {
+                const date = c.date ?? e.date;
+                if (!date || dateInZone(date, zone) !== day)
+                    continue;
+                const status = c.status ?? e.status ?? {};
+                const type = status.type ?? {};
+                const state = type.state ?? 'pre';
+                const sides = (c.competitors ?? []).slice().sort((a, b) => tennis ? (a.order ?? 0) - (b.order ?? 0) : (a.homeAway === 'away' ? -1 : 1)).map((p) => ({
+                    name: p.team?.displayName ?? p.athlete?.displayName ?? 'To be determined',
+                    short: p.team?.abbreviation ?? p.athlete?.shortName ?? 'TBD',
+                    score: state === 'pre' ? '—' : val(p.score), winner: !!p.winner,
+                    logo: p.team?.logo, record: p.records?.find((r) => r.type === 'total')?.summary,
+                    sets: (p.linescores ?? []).map((s) => ({ value: val(s.value), tiebreak: s.tiebreak == null ? undefined : val(s.tiebreak), winner: !!s.winner })),
+                    serving: !!p.serving, point: p.point == null ? undefined : val(p.point),
+                }));
+                const sit = c.situation;
+                const detail = tennis ? [g.grouping?.displayName, c.round?.displayName].filter(Boolean).join(' · ') : league === 'mlb' && state === 'in' && sit ? `${sit.outs ?? 0} out${sit.outs === 1 ? '' : 's'}${sit.balls != null ? ' · ' + sit.balls + '–' + (sit.strikes ?? 0) + ' count' : ''}` : (league === 'nfl' || league === 'cfb') && state === 'in' ? (sit?.downDistanceText ?? '') : (e.season?.slug === 'post-season' ? 'Postseason' : (c.broadcasts ?? []).flatMap((b) => b.names ?? []).join(' · '));
+                games.push({ id: tennis ? `${tour}-${c.id}` : `${league}-${c.id}`, league, date, state, ...remainingTime(league,status), status: type.shortDetail ?? type.description ?? 'Scheduled', title: tennis ? e.name : e.name ?? '', detail, venue: c.venue?.court ?? c.venue?.fullName ?? '', url: safeLink((e.links ?? []).find((l) => l.rel?.includes('summary'))?.href ?? e.links?.[0]?.href), sides, tennis });
+            }
+        }
+    }
+    return games;
+}
+
+// Clock values are reported game-clock seconds, never elapsed wall time.
+function parseClock(status) {
+  const text=String(status.displayClock??'').trim();
+  const match=/^(\d{1,2}):(\d{2}(?:\.\d+)?)$/.exec(text);
+  if(match&&Number(match[2])<60)return Number(match[1])*60+Number(match[2]);
+  if(/^\d+(?:\.\d+)?$/.test(text))return Number(text);
+  return typeof status.clock==='number'&&Number.isFinite(status.clock)&&status.clock>=0?status.clock:null;
+}
+function remainingTime(league,status) {
+  const quarter={wnba:600,nba:720,nfl:900,cfb:900}[league];
+  const period=Number(status.period),clock=parseClock(status);
+  if(!quarter||status.type?.state!=='in'||!Number.isInteger(period)||period<1)return {remainingSeconds:null,timeBasis:''};
+  if(/HALFTIME/i.test(status.type?.name??''))return {remainingSeconds:quarter*2,timeBasis:'regulation'};
+  if(period>4&&league==='cfb')return {remainingSeconds:null,timeBasis:'untimed OT'};
+  if(clock===null||clock<0||clock>(period<=4?quarter:league==='nba'||league==='wnba'?300:900))return {remainingSeconds:null,timeBasis:''};
+  return {remainingSeconds:period<=4?(4-period)*quarter+clock:clock,timeBasis:period<=4?'regulation':'current OT'};
+}
+function gapOf(game) {
+  if(game.state==='pre'||game.sides.length!==2)return null;
+  if(game.tennis) {
+    const [a,b]=game.sides;
+    if(!a.sets.length||!b.sets.length)return null;
+    const av=a.sets.filter(s=>s.winner).length,bv=b.sets.filter(s=>s.winner).length;
+    const last=Math.min(a.sets.length,b.sets.length)-1;
+    const ga=Number(a.sets[last].value),gb=Number(b.sets[last].value);
+    return {primary:Math.abs(av-bv),secondary:Number.isFinite(ga)&&Number.isFinite(gb)?Math.abs(ga-gb):0,unit:'sets'};
+  }
+  const values=game.sides.map(s=>/^\d+(?:\.\d+)?$/.test(s.score)?Number(s.score):NaN);
+  return values.every(Number.isFinite)?{primary:Math.abs(values[0]-values[1]),secondary:0,unit:game.league==='mlb'?'runs':'pts'}:null;
+}
+function gamePhase(item) {
+  const g=item.game;
+  if(item.stale)return 4;
+  if(/postpon|cancel|delay|suspend/i.test(g.status))return 4;
+  return {in:0,pre:2,post:3}[g.state]??4;
+}
+function compareGames(a,b,mode) {
+  const start=()=>Date.parse(a.game.date)-Date.parse(b.game.date)||a.game.id.localeCompare(b.game.id);
+  if(mode==='start')return start();
+  if(mode==='original')return ({in:0,pre:1,post:2}[a.game.state]??3)-({in:0,pre:1,post:2}[b.game.state]??3)||start();
+  const gapA=gapOf(a.game),gapB=gapOf(b.game);
+  const clockA=a.game.remainingSeconds,clockB=b.game.remainingSeconds;
+  const timed=['more','less','close-late','gap-time'].includes(mode);
+  const eligible=(item,gap,clock)=>gamePhase(item)===0&&(timed?Number.isFinite(clock)&&(mode==='more'||mode==='less'||!!gap):!!gap);
+  const ea=eligible(a,gapA,clockA),eb=eligible(b,gapB,clockB);
+  const bucket=(item,yes)=>yes?0:gamePhase(item)===0?1:gamePhase(item);
+  const bucketDelta=bucket(a,ea)-bucket(b,eb);
+  if(bucketDelta)return bucketDelta;
+  if(!ea||!eb)return start();
+  if(mode==='closest')return gapA.primary-gapB.primary||gapA.secondary-gapB.secondary||start();
+  if(mode==='more')return clockB-clockA||start();
+  if(mode==='less')return clockA-clockB||start();
+  const minutesA=Math.max(clockA/60,1/60),minutesB=Math.max(clockB/60,1/60);
+  if(mode==='gap-time')return gapA.primary/minutesA-gapB.primary/minutesB||clockA-clockB||start();
+  if(mode==='close-late')return 1/((gapB.primary+1)*minutesB)-1/((gapA.primary+1)*minutesA)||gapA.primary-gapB.primary||clockA-clockB||start();
+  return start();
+}
+function clockLabel(seconds) {
+  const n=Math.ceil(seconds);return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');
+}
+const SORT_MODES={
+  original:{label:'Live first (original)',help:'Live games, then upcoming games, then finished games; listed start time breaks ties.'},
+  start:{label:'Start time · earliest first',help:'ESPN’s listed start time, earliest first, regardless of game status. This is not a separately measured actual kickoff or tipoff.'},
+  closest:{label:'Closest score',help:'Live games first, smallest raw score margin first. Points and runs are compared directly; tennis uses set margin, then the latest-set game margin. These units are not equivalent across sports.'},
+  more:{label:'More time left',help:'Live games with clocks first, most game-clock time remaining first. Includes all remaining regulation quarters; in overtime, uses only the current OT clock.'},
+  less:{label:'Less time left',help:'Live games with clocks first, least game-clock time remaining first. This is playing time, not an estimate of real-world minutes until the game ends.'},
+  'close-late':{label:'Close + late',help:'Highest 1 / ((score margin + 1) × minutes left) first. Smaller margins and less time both raise priority; +1 keeps ties finite. This is a viewing-priority score, not a win probability.'},
+  'gap-time':{label:'Score margin ÷ time left',help:'Lowest score margin / minutes left first. This literal ratio can favor an early close game over a late close game; Close + late is the option that rewards both closeness and lateness.'},
+};
+
+// Everything runs in the browser. No server, framework, secret, or build is needed.
+(() => {
+  const REFRESH_MS = 30000;
+  const TIMEOUT_MS = 15000;
+  const STALE_MS = 90000;
+  const MIN_DAY = '1900-01-02', MAX_DAY = '2100-12-30';
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Denver';
+  const defs = [
+    ...SPORTS.filter(s=>s.id!=='tennis').map(s=>({...s,key:s.id,label:s.name})),
+    {id:'tennis',key:'atp',path:'tennis/atp',tour:'atp',label:'Men’s singles'},
+    {id:'tennis',key:'wta',path:'tennis/wta',tour:'wta',label:'Women’s singles'},
+  ];
+  const $ = id=>document.getElementById(id);
+  const escapeHTML = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const esc=escapeHTML;
+  const time = value=>new Date(value).toLocaleTimeString([],{hour:'numeric',minute:'2-digit',second:'2-digit'});
+  function imageURL(value) { try {const u=new URL(value);return u.protocol==='https:'&&u.hostname==='a.espncdn.com'?u.href:'';}catch{return '';}}
+  function dayShift(day,n) {return new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);}
+  function validDay(day) {return /^\d{4}-\d{2}-\d{2}$/.test(day)&&day>=MIN_DAY&&day<=MAX_DAY&&Number.isFinite(Date.parse(day))&&new Date(day).toISOString().slice(0,10)===day;}
+  let day=dateInZone(new Date(),zone),selected='all',followToday=true,revision=0,busy=false,lastCheck=0;
+  let sortMode='original',grouped=true;
+  try {const pref=JSON.parse(localStorage.getItem('scoreboard-sort-v1')||'{}');if(SORT_MODES[pref.sort])sortMode=pref.sort;if(typeof pref.grouped==='boolean')grouped=pref.grouped;}catch{}
+  function saveView(){try{localStorage.setItem('scoreboard-sort-v1',JSON.stringify({sort:sortMode,grouped}));}catch{}}
+  let controller=new AbortController();
+  let feeds=new Map();
+  const cache=new Map();
+  let queue=[],activeRequests=0;
+  // Limit simultaneous connections. Queued jobs are cancelled when the date changes.
+  function limited(task,signal) {
+    return new Promise((resolve,reject)=>{queue.push({task,signal,resolve,reject});drain();});
+  }
+  function drain() {
+    while(activeRequests<6&&queue.length){
+      const job=queue.shift();
+      if(job.signal.aborted){job.reject(new DOMException('Cancelled','AbortError'));continue;}
+      activeRequests++;
+      Promise.resolve().then(job.task).then(job.resolve,job.reject).finally(()=>{activeRequests--;drain();});
+    }
+  }
+  async function request(path,date,signal) {
+    const url=`https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?dates=${date.replaceAll('-','')}&limit=1000${path==='football/college-football'?'&groups=80':''}`;
+    const saved=cache.get(url);
+    if(saved&&Date.now()-saved.receivedAt<20000)return saved;
+    return limited(async()=>{
+      if(signal.aborted)throw new DOMException('Cancelled','AbortError');
+      const timeoutController=new AbortController();
+      const abort=()=>timeoutController.abort();
+      signal.addEventListener('abort',abort,{once:true});
+      const timer=setTimeout(abort,TIMEOUT_MS);
+      try {
+        const response=await fetch(url,{
+          mode:'cors',credentials:'omit',headers:{Accept:'application/json'},signal:timeoutController.signal,
+        });
+        if(!response.ok)throw new Error(`ESPN returned HTTP ${response.status}`);
+        const data=await response.json();
+        if(!Array.isArray(data.events))throw new Error('Unexpected scoreboard format');
+        const value={data,receivedAt:Date.now()};
+        if(cache.size>=72)cache.delete(cache.keys().next().value);
+        cache.set(url,value);return value;
+      } finally {clearTimeout(timer);signal.removeEventListener('abort',abort);}
+    },signal);
+  }
+  function emptyFeed() {return {games:[],receivedAt:0,error:'',failures:0,nextTry:0,loading:false};}
+  function isStale(f) {return !!f.error||!!f.receivedAt&&Date.now()-f.receivedAt>STALE_MS;}
+  function busyState(value) {
+    busy=value;$('refresh').disabled=value;$('refresh-icon').classList.toggle('spin',value);
+    $('scores-panel').setAttribute('aria-busy',String(value));updateStatus();
+  }
+  async function refresh(force=false) {
+    if(busy||document.hidden)return;
+    if(!navigator.onLine){updateStatus();return;}
+    const token=revision,signal=controller.signal,snapshotDay=day;
+    const needed=defs.filter(d=>selected==='all'||d.id===selected).filter(d=>force||Date.now()>=(feeds.get(d.key)?.nextTry??0));
+    if(!needed.length){updateStatus();return;}
+    busyState(true);
+    for(const def of needed){const f=feeds.get(def.key)||emptyFeed();f.loading=true;feeds.set(def.key,f);}
+    render();
+    await Promise.all(needed.map(async def=>{
+      const old=feeds.get(def.key)||emptyFeed();
+      try {
+        // Adjacent calendar days catch games that cross a local midnight.
+        const results=await Promise.all([-1,0,1].map(n=>request(def.path,dayShift(snapshotDay,n),signal)));
+        const games=results.flatMap(r=>normalize(r.data,def.id,snapshotDay,zone,def.tour));
+        if(token!==revision)return;
+        feeds.set(def.key,{games:[...new Map(games.map(g=>[g.id,g])).values()],receivedAt:Math.min(...results.map(r=>r.receivedAt)),error:'',failures:0,nextTry:0,loading:false});
+      } catch(error) {
+        if(token!==revision||signal.aborted)return;
+        const failures=old.failures+1;
+        feeds.set(def.key,{...old,loading:false,error:'Could not reach the score feed.',failures,nextTry:Date.now()+Math.min(300000,REFRESH_MS*2**(failures-1))});
+      }
+      if(token===revision)render();
+    }));
+    if(token!==revision)return;
+    lastCheck=Date.now();busyState(false);render();
+    const failed=needed.filter(d=>feeds.get(d.key)?.error).length;
+    $('announcer').textContent=failed?'Refresh completed. Some scores are unavailable.':'Scores checked at '+time(lastCheck)+'.';
+  }
+  function changeDay(next) {
+    if(!validDay(next)){$('date').value=day;return;}
+    followToday=next===dateInZone(new Date(),zone);
+    if(next===day){refresh(true);return;}
+    controller.abort();revision++;controller=new AbortController();
+    day=next;feeds=new Map();lastCheck=0;busyState(false);updateDate();render();refresh();
+  }
+  function updateDate() {
+    $('date').value=day;
+    $('eyebrow').textContent=followToday?'TODAY’S SCOREBOARD':'SCOREBOARD';
+    $('day-heading').textContent=new Date(day+'T12:00:00').toLocaleDateString([],{weekday:'long',month:'long',day:'numeric',...(day.slice(0,4)!==String(new Date().getFullYear())?{year:'numeric'}:{})});
+    $('previous').disabled=day===MIN_DAY;$('next').disabled=day===MAX_DAY;
+  }
+  function selectTab(id) {
+    if(!['all',...SPORTS.map(s=>s.id)].includes(id))return;
+    selected=id;
+    for(const button of $('sport-tabs').querySelectorAll('[role="tab"]')) {
+      const active=button.dataset.sport===id;
+      button.setAttribute('aria-selected',String(active));button.dataset.state=active?'active':'inactive';button.tabIndex=active?0:-1;
+    }
+    $('scores-panel').setAttribute('aria-labelledby','tab-'+id);render();
+    // The active refresh finishes its current requests. Start any newly needed feeds next.
+    if(!busy)refresh();
+  }
+  function card(g,stale) {
+    const live=g.state==='in'&&!stale;
+    const starts=new Date(g.date).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+    const status=g.state==='pre'&&!/postpon|cancel|delay|suspend/i.test(g.status)?starts:g.status;
+    const rows=g.sides.map(s=>{
+      const img=imageURL(s.logo);
+      const initials=g.tennis?s.name.split(' ').map(n=>n[0]).slice(0,2).join(''):s.short;
+      const badge=`<span class="team-badge"><span class="initials">${esc(initials)}</span>${img?`<img src="${esc(img)}" width="32" height="32" alt="" loading="lazy" referrerpolicy="no-referrer">`:''}</span>`;
+      const sets=g.tennis?`<div class="sets" aria-label="Set scores">${g.state==='pre'||!s.sets.length?'<span>—</span>':s.sets.map((v,i)=>`<span class="${v.winner?'won-set':''}" title="Set ${i+1}">${esc(v.value)}${v.tiebreak!==undefined?`<sup>${esc(v.tiebreak)}</sup>`:''}</span>`).join('')}${g.state==='in'&&s.point!=null?`<b class="point" title="Current game points">${esc(s.point)}</b>`:''}</div>`:`<span class="score">${esc(s.score)}</span>`;
+      return `<div class="side ${s.winner?'winner':''}"><div class="team-name">${badge}<span><span class="name">${esc(s.name)}${s.serving?'<span class="serve" aria-label="Serving">●</span>':''}</span>${s.record?`<span class="record">${esc(s.record)}</span>`:''}</span></div>${sets}</div>`;
+    }).join('');
+    const sport=SPORTS.find(s=>s.id===g.league);
+    const gap=gapOf(g);
+    const gapText=gap?(g.tennis?`Set gap ${gap.primary} · latest-set gap ${gap.secondary}`:`Gap ${gap.primary} ${gap.unit}`):'';
+    const timeText=Number.isFinite(g.remainingSeconds)?`${clockLabel(g.remainingSeconds)} ${g.timeBasis==='current OT'?'in this OT':'reg. left'}`:g.timeBasis==='untimed OT'?'Untimed OT':'';
+    const metricText=[gapText,timeText].filter(Boolean).join(' · ');
+    return `<article style="--league-color:${sport?.color??'#a2afbd'}" class="score-card ${live?'live-card':''}"><div class="game-meta"><span class="league-tag">${esc(sport?.name??g.league)}${g.league==='cfb'?' · FBS':''}</span><span>Start ${esc(starts)}</span></div><div class="card-top"><span class="${live?'live-label':'game-status'}">${live?'<span class="live-dot" aria-hidden="true"></span>':''}${stale?'Last known · ':''}${esc(status)}</span>${g.tennis?`<span class="match-title">${esc(g.title)}</span>`:`<span class="card-detail">${esc(g.detail)}</span>`}</div>${g.tennis?`<div class="tennis-label">${esc(g.detail)}</div>`:''}<div class="sides">${rows}</div>${metricText?`<div class="game-metrics">${stale?'Last known · ':''}${esc(metricText)}</div>`:''}<div class="card-bottom"><span>${esc(g.venue||'Venue not listed')}</span>${g.url?`<a href="${esc(g.url)}" target="_blank" rel="noopener noreferrer" aria-label="Details for ${esc(g.title)}">Details ↗</a>`:''}</div></article>`;
+  }
+  let staleSignature='';
+  function render() {
+    const visible=SPORTS.filter(s=>selected==='all'||s.id===selected);
+    let live=0,count=0,unknown=false;
+    const allItems=[],allNotices=[],waiting=[];
+    const groupedHTML=visible.map(s=>{
+      const sources=defs.filter(d=>d.id===s.id);
+      const ff=sources.map(d=>({def:d,feed:feeds.get(d.key)}));
+      const items=ff.flatMap(({feed:f})=>f?f.games.map(g=>({game:g,stale:isStale(f)})):[])
+        .sort((a,b)=>compareGames(a,b,sortMode));
+      allItems.push(...items);
+      count+=items.length;live+=items.filter(i=>gamePhase(i)===0).length;
+      const pending=ff.some(({feed:f})=>!f||f.loading&&!f.receivedAt);
+      const errors=ff.filter(({feed:f})=>f&&isStale(f));
+      const incomplete=pending||!!errors.length;unknown||=incomplete;
+      if(pending)waiting.push(s.name);
+      const notices=errors.map(({def:d,feed:f})=>`<div class="feed-warning"><span>${esc(d.label+': ')}${f.error?'Feed unavailable.':'Scores have not refreshed recently.'} ${f.receivedAt?'Last received '+esc(time(f.receivedAt))+'. ':''}${f.error?`<span data-retry="${f.nextTry}"></span>`:'Checking again automatically.'}</span></div>`).join('');
+      allNotices.push(notices);
+      const subtitle=items.length?`${items.length} ${s.id==='tennis'?'matches':'games'}${incomplete?' · incomplete':''}`:s.id==='tennis'?'Australian Open · Roland-Garros · Wimbledon · US Open':s.id==='cfb'?'FBS · all rankings':'Daily schedule';
+      let content;
+      if(items.length)content=`<div class="games-grid">${items.map(i=>card(i.game,i.stale)).join('')}</div>`;
+      else if(pending)content=`<div class="empty-state loading-state"><span class="empty-dash">···</span><div><p>Loading ${esc(s.name)} scores…</p><span>Connecting to ESPN.</span></div></div>`;
+      else content=`<div class="empty-state"><span class="empty-dash">—</span><div><p>${errors.length?'Waiting for scores':s.id==='tennis'?'No Grand Slam singles matches listed':'No games listed for this date'}</p><span>${errors.length?'Automatic retries are on. You can also use Refresh.':s.id==='tennis'?'Men’s and women’s singles across the four majors.':'Choose another date to see the schedule.'}</span></div></div>`;
+      return `<section class="league-section" style="--league-color:${s.color}" aria-label="${esc(s.name)}"><div class="league-heading"><h2><span class="league-bar" aria-hidden="true"></span>${esc(s.name)}</h2><span>${subtitle}</span></div>${notices}${content}</section>`;
+    }).join('');
+    const across=!grouped&&selected==='all';
+    allItems.sort((a,b)=>compareGames(a,b,sortMode));
+    $('scores-panel').innerHTML=across?`<section class="league-section" aria-label="All games sorted together">${allNotices.join('')}${waiting.length?`<p class="loading-summary">Loading ${esc(waiting.join(', '))}…</p>`:''}${allItems.length?`<div class="games-grid">${allItems.map(i=>card(i.game,i.stale)).join('')}</div>`:waiting.length?'':`<div class="empty-state"><span class="empty-dash">—</span><div><p>${unknown?'Waiting for scores':'No games listed for this date'}</p><span>${unknown?'Automatic retries are on.':'Choose another date to see the schedule.'}</span></div></div>`}</section>`:groupedHTML;
+    $('sort-scope').textContent=across?'Sorting across all sports.':selected==='all'?'Sorting within each sport.':'Sorting this sport.';
+    $('sort-description').textContent=SORT_MODES[sortMode].help;
+    $('group-sports').disabled=selected!=='all';
+    $('live-count').textContent=String(live);
+    $('event-count').textContent=`/ ${count} events${unknown?' · partial':''}`;
+    staleSignature=Array.from(feeds.entries()).map(([k,f])=>k+isStale(f)).join('|');
+    updateStatus();
+  }
+  function updateStatus() {
+    const relevant=defs.filter(d=>selected==='all'||d.id===selected).map(d=>feeds.get(d.key));
+    const errors=relevant.filter(f=>f&&isStale(f));
+    const offline=!navigator.onLine;
+    const allFailed=relevant.length>0&&relevant.every(f=>f?.error&&!f.receivedAt);
+    const message=offline?'You’re offline. Reconnect to load new scores.':allFailed?'The score feeds could not be reached. Check your connection or browser blockers; automatic retries are on.':'';
+    $('connection-warning').hidden=!message;$('connection-warning').textContent=message;
+    const seconds=lastCheck?Math.max(0,Math.floor((Date.now()-lastCheck)/1000)):null;
+    $('refresh-status').textContent=offline?'Offline':document.hidden?'Updates paused':busy?'Checking scores…':errors.length?'Some scores unavailable':seconds===null?'Connecting…':`Checked ${seconds<5?'just now':seconds<60?seconds+'s ago':Math.floor(seconds/60)+'m ago'}`;
+    $('refresh-status').classList.toggle('warning-text',!!errors.length||offline);
+    for(const el of document.querySelectorAll('[data-retry]')) {
+      const seconds=Math.max(0,Math.ceil((Number(el.dataset.retry)-Date.now())/1000));
+      el.textContent=seconds?'Retrying in about '+seconds+'s.':'Retrying shortly.';
+    }
+  }
+  $('sort').innerHTML=Object.entries(SORT_MODES).map(([key,mode])=>`<option value="${key}">${esc(mode.label)}</option>`).join('');
+  $('sort').value=sortMode;$('group-sports').checked=grouped;
+  $('sort').addEventListener('change',()=>{const next=$('sort').value;if(SORT_MODES[next]){sortMode=next;saveView();render();}});
+  $('group-sports').addEventListener('change',()=>{grouped=$('group-sports').checked;saveView();render();});
+  $('sport-tabs').innerHTML=[{id:'all',name:'All sports'},...SPORTS].map(s=>`<button type="button" role="tab" id="tab-${s.id}" aria-controls="scores-panel" aria-selected="${s.id==='all'}" tabindex="${s.id==='all'?0:-1}" data-slot="tabs-trigger" data-sport="${s.id}" data-state="${s.id==='all'?'active':'inactive'}">${s.color?`<span class="sport-color" style="background:${s.color}" aria-hidden="true"></span>`:''}${esc(s.name)}</button>`).join('');
+  $('sport-tabs').addEventListener('click',event=>{const button=event.target.closest('[role="tab"]');if(button)selectTab(button.dataset.sport);});
+  $('sport-tabs').addEventListener('keydown',event=>{
+    if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    event.preventDefault();const buttons=Array.from($('sport-tabs').querySelectorAll('[role="tab"]'));const i=buttons.indexOf(document.activeElement);
+    const next=event.key==='Home'?0:event.key==='End'?buttons.length-1:(i+(event.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;
+    buttons[next].focus();selectTab(buttons[next].dataset.sport);
+  });
+  // If a logo fails, its text badge remains visible. No external asset is required for the UI.
+  $('scores-panel').addEventListener('error',event=>{if(event.target.tagName==='IMG')event.target.remove();},true);
+  $('previous').addEventListener('click',()=>changeDay(dayShift(day,-1)));
+  $('next').addEventListener('click',()=>changeDay(dayShift(day,1)));
+  $('today').addEventListener('click',()=>changeDay(dateInZone(new Date(),zone)));
+  $('date').addEventListener('change',event=>changeDay(event.target.value));
+  $('refresh').addEventListener('click',()=>refresh(true));
+  $('timezone').textContent='Times in '+zone.replaceAll('_',' ')+'.';
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){render();refresh();}});
+  window.addEventListener('online',()=>refresh(true));
+  window.addEventListener('offline',()=>{render();updateStatus();});
+  setInterval(()=>{
+    const today=dateInZone(new Date(),zone);
+    if(followToday&&day!==today){changeDay(today);return;}
+    const nextSignature=Array.from(feeds.entries()).map(([k,f])=>k+isStale(f)).join('|');
+    if(staleSignature!==nextSignature)render();else updateStatus();
+  },1000);
+  setInterval(()=>refresh(),REFRESH_MS);
+  updateDate();render();refresh();
+})();
+
+</script>
+</body>
+</html>
