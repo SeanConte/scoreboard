@@ -1,8 +1,24 @@
-# Scoreboard — scoreboard0_2
+# Scoreboard — scoreboard0_5
 
-A portable sports scoreboard for WNBA, NBA, MLB, NFL, college football (FBS), and men's and women's singles at the Australian Open, Roland-Garros, Wimbledon, and US Open.
+A portable sports scoreboard for WNBA, NBA, MLB, NWSL, MLS, NHL, NFL, college football (FBS), and men's and women's singles at the Australian Open, Roland-Garros, Wimbledon, and US Open.
 
 The complete application is in **index.html**. Its HTML, CSS, JavaScript, header logo, and explicit browser icons are embedded in that one file. There are no package installations, build steps, API keys, accounts, or server dependencies.
+
+## Schedule progression in scoreboard0_5
+
+The previous “Live first” default is now **Schedule order (default)**. Games remain in scheduled start-time order through upcoming, live, and completed states. Live highlighting therefore moves through the day's schedule without moving cards to the top. Other sorting options retain their previous behavior.
+
+Completed games fade to 55% opacity; hovering or focusing a link inside a completed card restores full opacity for reading. Live, upcoming, postponed, cancelled, delayed, and suspended games do not receive this completed-game fade. Existing saved preferences continue to work.
+
+## New leagues in scoreboard0_4
+
+Added NWSL, MLS, and NHL immediately after MLB, in that order, in both the tabs and grouped scoreboard. They share automatic refreshing, date navigation, live highlighting, score sorting, and feed-failure handling. Soccer and hockey margins are labeled in goals.
+
+NHL time sorting combines the current clock with the remaining regulation periods, or uses only the current overtime clock. Shootouts have no countdown. Soccer displays the provider's match status/clock but is excluded from countdown-based sorting because the total added time is unknown.
+
+## Live emphasis in scoreboard0_3
+
+Live games have an amber frame, a warm tinted background, an explicit LIVE badge, and brighter team names and scores. Delayed, suspended, cancelled, and stale results do not receive live emphasis. The visual treatment is static, with no pulsing or flashing.
 
 ## Visual update in scoreboard0_2
 
@@ -40,13 +56,13 @@ GitHub's instructions: https://docs.github.com/en/pages/getting-started-with-git
 
 ## Sorting
 
-The default preserves the original layout: **Group by sport** enabled and **Live first (original)** selected. Sorting is reapplied after score refreshes, so games can move as scores and clocks change.
+The default is **Group by sport** enabled and **Schedule order (default)** selected. In this mode, scores and status changes do not affect placement: games remain ordered by the provider’s listed start time, with event ID breaking ties. Schedule corrections or newly listed games can still change positions. Other ranking modes are reapplied after refreshes, so their games can move as scores and clocks change.
 
 | Option | Order |
 | --- | --- |
-| Live first (original) | Live, upcoming, then finished; start time breaks ties. |
+| Schedule order (default) | Scheduled start time, earliest first, regardless of game status; event ID breaks ties. Live highlighting and completed-game fading change in place. |
 | Start time | ESPN's listed start time, earliest first, regardless of game status. |
-| Closest score | Live games by smallest absolute margin. Points and runs are raw units, not normalized across sports. Tennis compares completed-set margin, then the latest-set game margin. |
+| Closest score | Live games by smallest absolute margin. Points, runs, and goals are raw units, not normalized across sports. Tennis compares completed-set margin, then the latest-set game margin. |
 | More time left | Live timed games by most game-clock time left. |
 | Less time left | Live timed games by least game-clock time left. |
 | Close + late | Highest `1 / ((margin + 1) × minutes remaining)` first. Both smaller margins and less time raise priority. |
@@ -58,11 +74,14 @@ For **All sports**, disable **Group by sport** to apply the selected comparison 
 
 NBA regulation uses four 12-minute quarters, WNBA four 10-minute quarters, and NFL/CFB four 15-minute quarters. The app combines the current clock with all remaining regulation quarters. In NBA, WNBA, or NFL overtime, it uses only the current overtime clock: possible future overtime is unknown. College-football overtime is untimed.
 
-MLB and tennis have no fixed game countdown. They remain on the scoreboard and participate in start-time, live-first, and score-margin sorting. In time-based sorts they follow live games with usable clocks, along with untimed CFB overtime and missing-clock games. Upcoming and completed games follow those live games. Stale or delayed/suspended/cancelled games follow the other groups for metric sorts. The original and start-time sorts preserve their stated order instead.
+NHL regulation uses three 20-minute periods; overtime uses the reported clock for the current period. Shootouts have no countdown. Soccer’s match clock counts upward and added time is not known in advance, so NWSL and MLS do not receive an invented time-remaining value.
+
+MLB and tennis have no fixed game countdown. They remain on the scoreboard and participate in schedule, start-time, and score-margin sorting. In time-based sorts they follow live games with usable clocks, along with soccer, hockey shootouts, untimed CFB overtime, and missing-clock games. Upcoming and completed games follow those live games. Stale or delayed/suspended/cancelled games follow the other groups for metric sorts. The original and start-time sorts preserve their stated order instead.
 
 Time left means **game-clock time**, not real-world time until a game ends. Scores and clocks update from the feed; the app does not run a synthetic countdown between responses. Ratios clamp remaining time to at least one second to avoid division by zero. The `+1` in Close + late handles tied games without infinity. The combined score is a viewing-priority heuristic, not a win probability or a sport-normalized measure of competitiveness.
 
 Timing references:
+- https://www.nhl.com/kraken/news/nhl-overtime-shootouts-row-310366008
 - https://official.nba.com/rule-no-5-scoring-and-timing/
 - https://www.wnba.com/faq
 - https://operations.nfl.com/rules-officiating/2026-nfl-rulebook
@@ -77,6 +96,9 @@ The app calls ESPN's publicly reachable, undocumented JSON scoreboard endpoints:
 | WNBA | `basketball/wnba/scoreboard` |
 | NBA | `basketball/nba/scoreboard` |
 | MLB | `baseball/mlb/scoreboard` |
+| NWSL | `soccer/usa.nwsl/scoreboard` |
+| MLS | `soccer/usa.1/scoreboard` |
+| NHL | `hockey/nhl/scoreboard` |
 | NFL | `football/nfl/scoreboard` |
 | CFB (FBS) | `football/college-football/scoreboard?groups=80` |
 | Men's tennis | `tennis/atp/scoreboard` |
@@ -119,3 +141,7 @@ The inline JavaScript passed syntax checks. Live HTTP checks passed for all six 
 A full graphical-browser test of a locally opened file or a deployed GitHub Pages copy was not available in the creation environment. The HTTP and simulated-DOM checks do not replace that browser test. The CFB update additionally verified real FBS schedule parsing, sort controls and grouping, all seven comparison rules, regulation/halftime/overtime clocks, missing clocks, zero seconds, and stale/upcoming/completed-game handling.
 
 For scoreboard0_2, embedded icon bytes and export sizes were checked, text contrast was checked against the new surfaces, and the unchanged score logic was verified by comparison with scoreboard0_1. Browser appearance and home-screen icon behavior have not been verified in a graphical browser.
+
+For scoreboard0_4, all three added endpoints returned HTTP 200 and `Access-Control-Allow-Origin: *` with both local-file and sample GitHub Pages Origin headers. The JavaScript syntax, rendered tab/section order, soccer/hockey goal margins, and NHL regulation, overtime, and shootout handling were checked. Real NWSL, MLS, and NHL response fixtures parsed successfully. Soccer empty-date responses were also verified. A graphical-browser check was unavailable in this environment.
+
+For scoreboard0_5, JavaScript syntax and application initialization passed. Checks covered persistent schedule ordering across game-status changes, retained live priority in score-based sorting, completed/live/cancelled card classes, and existing saved preferences. Graphical browser appearance was not checked.
