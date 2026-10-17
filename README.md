@@ -1,8 +1,14 @@
-# Scoreboard — scoreboard0_5
+# Scoreboard — scoreboard0_7
 
 A portable sports scoreboard for WNBA, NBA, MLB, NWSL, MLS, NHL, NFL, college football (FBS), and men's and women's singles at the Australian Open, Roland-Garros, Wimbledon, and US Open.
 
 The complete application is in **index.html**. Its HTML, CSS, JavaScript, header logo, and explicit browser icons are embedded in that one file. There are no package installations, build steps, API keys, accounts, or server dependencies.
+
+## Competition context in scoreboard0_6
+
+Game cards now display a small, muted context label beside the league: **Preseason**, **Spring Training**, NFL/CFB **Week N**, **Postseason**, and named playoff rounds such as **ALCS**, **Wild Card**, **Conference Finals**, and **Stanley Cup Final** when ESPN supplies that information. Series game numbers and standings are shown only when provided in game data. Regular-season games outside football have no additional label. The existing tennis round details are unchanged.
+
+This change does not modify game sorting, live highlighting, score calculations, date selection, the refresh schedule, or the supported leagues. Labels depend on the ESPN scoreboard feed and are omitted when ambiguous.
 
 ## Schedule progression in scoreboard0_5
 
@@ -145,3 +151,21 @@ For scoreboard0_2, embedded icon bytes and export sizes were checked, text contr
 For scoreboard0_4, all three added endpoints returned HTTP 200 and `Access-Control-Allow-Origin: *` with both local-file and sample GitHub Pages Origin headers. The JavaScript syntax, rendered tab/section order, soccer/hockey goal margins, and NHL regulation, overtime, and shootout handling were checked. Real NWSL, MLS, and NHL response fixtures parsed successfully. Soccer empty-date responses were also verified. A graphical-browser check was unavailable in this environment.
 
 For scoreboard0_5, JavaScript syntax and application initialization passed. Checks covered persistent schedule ordering across game-status changes, retained live priority in score-based sorting, completed/live/cancelled card classes, and existing saved preferences. Graphical browser appearance was not checked.
+
+
+## Expanded game details in scoreboard0_7
+
+Select **Game flow + stats** on any game card to expand it in the same dashboard. Game flow charts use play-by-play scoring updates when available, and otherwise use period or set scores. Clock-based updates are plotted against playing time; when times are missing the x-axis explicitly states that events are spaced in sequence. Switch between score difference and both teams’ scores. Hover, focus, or tap scoring points for values. Compare a selected team statistic, or select a player and an individual box-score statistic from available ESPN data. Player statistic totals are **not** reconstructed as historical time series. The details load only after expansion, one card at a time, and refresh alongside live game scores. Missing detailed data does not prevent available period scoring from appearing.
+
+## Validation for scoreboard0_7
+
+JavaScript syntax and mocked-browser interaction tests passed for desktop and mobile widths, including expanded panels, chart view switching, player selection, statistic selection, and no horizontal overflow. Real ESPN summary requests could not be exercised in this runtime; data availability and browser permissions may vary by league and game.
+
+## Scoreboard 0.8: simplified expanded cards
+
+Expanded games show a two-team scoring-progression chart by default, with color-matched markers for *both* teams, plus a short sport-sensitive comparison of team totals and notable in-game player totals when ESPN provides them. There is no difference chart, graph mode selector, player picker, or single-stat selector. ESPN primary team colors are used when present and brightened for readability; a contrasting fallback is used if missing or indistinguishable. Period scoring remains available. When detailed ESPN data is missing, the graph can use period-end scores and unavailable panels clearly indicate their limits.
+
+
+### Scoreboard 0.9 — scoring markers and expanded-card control
+
+The two-team scoring chart places a colored dot only on a team whose score has increased at that event. When a period-only fallback shows increases for both teams at period end, both lines legitimately receive markers. Score corrections and unchanged scores are not marked. The hit area is aligned to the scoring team(s), rather than spanning to the non-scoring line. The compact-card control keeps a consistent **Game flow + stats** label, indicates the open state with a filled/outlined selected style and upward chevron, and uses `aria-expanded` and contextual accessible labels. The existing one-game-at-a-time expansion behavior and card sorting are unchanged.
