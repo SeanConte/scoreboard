@@ -1,8 +1,51 @@
-# Scoreboard — scoreboard0_7
+# Scoreboard — scoreboard0_15
 
 A portable sports scoreboard for WNBA, NBA, MLB, NWSL, MLS, NHL, NFL, college football (FBS), and men's and women's singles at the Australian Open, Roland-Garros, Wimbledon, and US Open.
 
 The complete application is in **index.html**. Its HTML, CSS, JavaScript, header logo, and explicit browser icons are embedded in that one file. There are no package installations, build steps, API keys, accounts, or server dependencies.
+
+## Scoreboard 0.15 — metric integrity and reliability pass
+
+No new interface panels or default-card changes. The single, two-team chart remains unchanged in presentation. This release focuses on recovering missing histories and suppressing misleading ones:
+
+- **NHL shots on goal:** Lazy-fetches ESPN's separate core game play-by-play collection, when readable from the browser. Classifies goal/shot-on-goal events while excluding missed, blocked, disallowed, and shootout events; counts a goal only once as a shot. Also supports team references supplied as URLs rather than embedded team IDs.
+- **MLB / MLS / NWSL:** Attempts the same full-play collection when an expanded game is opened. Improved treatment of recorded baseball hit text and soccer on-target vs off-target events. Does not infer events from final totals.
+- **Other sports:** NBA/WNBA, NFL/CFB and tennis metrics remain; for finished NBA and football games, event-reconstructed totals now require exact two-team reconciliation with ESPN's box scores, just as the other completed-game metrics do. Both teams' currently reported totals are also used to flag incomplete live histories when available.
+- **Data loading:** Added capped/paginated optional play-fetching, de-duplication, lazy loading (only for expanded games), 60-second retry for failed optional feeds on an expanded game, and invalidation of cached histories when a fuller feed arrives. Malformed or reference-only play collections are rejected.
+- **Transparency:** The expanded chart quietly explains when additional stat histories could not be verified. The original Score and period-scoring fallbacks remain usable even if the optional play feed fails or is blocked by the browser.
+
+**Validation:** Tested in headless Chromium against fixture-shaped NBA, WNBA, NFL, CFB, MLB, NHL, MLS, NWSL, and tennis examples. Checks include core pagination, NHL goal/shot classification, team reference matching, official-stat reconciliation, selector visibility, signed-area display, and phone-width overflow. No JavaScript runtime errors were observed in these tests.
+
+**Important limitation:** Live requests to ESPN and cross-origin browser access to the core play endpoint could not be verified from the test environment. Consequently some verified-only metrics may remain unavailable on particular real games. Re-test on the deployed GitHub Pages origin to confirm actual ESPN coverage and browser permissions. The published website is unchanged until deployment.
+
+## Scoreboard 0.14 — cross-sport graph metrics and data integrity
+
+The expanded card still contains ONE progression chart and its sport-specific metric dropdown. Score remains the default, except tennis where "Games won" describes the set-based default accurately. New selectable metrics when ESPN's data supports a full timeline:
+
+- **NBA / WNBA:** 3PT made/attempted, FG made/attempted, free throws made/attempted, rebounds, assists, turnovers (existing features retained).
+- **NFL / CFB:** rushing yards, passing yards, total yards, rushing attempts, first downs (existing features retained).
+- **MLB:** hits, walks, batter strikeouts, home runs, positioned by INNING and batting half. Within each batting half, non-clocked plays use their event order, not pretend elapsed minutes.
+- **NHL:** shots on goal, hits, faceoffs won using period and game clock.
+- **MLS / NWSL:** shots, shots on target, corners, yellow cards using recorded match minutes, including stoppage time where present.
+- **Tennis:** games won and sets won accumulated from scoreboard set scores (no invented rally or point-by-point detail); no integral in set-based charts.
+
+Backend changes include a shared normalization/classification-to-timeline pipeline, ESPN team ID matching with fallback logic, memoized metric calculations for expanded cards, sport-specific time bases, and an explicit reconciliation check. **Finished-game** non-tennis metric histories require both teams' reconstructed counts to match the available ESPN team box-score totals; otherwise the option is hidden. Live events may still be incomplete and are labeled accordingly. The chart always shows both teams, only puts dots on the team whose cumulative value changes, and colors the fill by whichever team leads in the selected statistic.
+
+The signed-area readout is only calculated for clocked events or real elapsed match minutes, never for innings or sets. Completed soccer matches carry the last advantage to at least the end of regulation (and to 120 minutes only when events establish extra time). Tennis sets won are inferred from completed set scores when winner flags are absent.
+
+**QA:** Chromium desktop (1280px) and mobile (390px) browser simulations covered NBA, WNBA, NFL, CFB, MLB, NHL, MLS, NWSL, and tennis. Tests verified metric switching, empty/partial responses, final-total mismatch rejection for MLB/NHL/soccer, inferred tennis set winners, responsive width, and syntax (no runtime JS errors in the fixtures). ESPN live responses could not be fetched from the test environment, so per-game metric availability is conservative and some providers' event formats may require follow-up adaptation. The published GitHub Pages site is unchanged until you deploy the ZIP.
+
+## Scoreboard 0.12 — statistics on the progression graph
+
+Game flow now has **one chart** with an optional, sport-specific metric selector. It defaults to Score for every game. When game event history provides usable clocks, team IDs, and classified plays, NBA/WNBA add cumulative **three-pointers made** and **three-point attempts**; NFL/CFB add cumulative **rushing yards** and **passing yards**. Scoring and statistical lines both use game time on the x-axis, and colored fill remains restricted to the area between the two lines, changing color when the leader in the selected measure changes. Football yardage can decrease following a negative play. A dot marks only the team whose running total changes, retaining smaller basketball dots.
+
+Metrics only appear when usable event history is present. For finished games, reconstructed totals are checked against ESPN box-score totals where those are available; mismatches suppress the metric. Partial or unsupported play feeds do **not** become fabricated timelines. This release was exercised in Chromium with simulated NBA/NFL play-by-play, missing-data fallbacks, and narrow screens; actual ESPN live game responses were not accessible for exhaustive testing.
+
+## Scoreboard 0.10 — true timeline spacing
+
+The expanded two-team scoring chart places clocked scoring plays according to **elapsed game minutes**, including regulation period boundaries. The score line remains flat between scoring events and steps when a team scores. Soccer uses elapsed match minute (including stoppage time); baseball uses inning and half-inning position, and tennis uses set number. With incomplete play clocks, the graph falls back to available **period totals** rather than placing scoring events at falsely equal intervals. Chart labels distinguish actual timing from aggregated totals. Scoring dots appear only on teams whose scores increase at an event, and NBA/WNBA dots are smaller than the other sports. There are no new user controls.
+
+The ESPN summary service is undocumented, and available play-level timing varies by game. Graphical browser checks used simulated response data; live cross-league requests are not exhaustively verified.
 
 ## Competition context in scoreboard0_6
 
@@ -155,7 +198,7 @@ For scoreboard0_5, JavaScript syntax and application initialization passed. Chec
 
 ## Expanded game details in scoreboard0_7
 
-Select **Game flow + stats** on any game card to expand it in the same dashboard. Game flow charts use play-by-play scoring updates when available, and otherwise use period or set scores. Clock-based updates are plotted against playing time; when times are missing the x-axis explicitly states that events are spaced in sequence. Switch between score difference and both teams’ scores. Hover, focus, or tap scoring points for values. Compare a selected team statistic, or select a player and an individual box-score statistic from available ESPN data. Player statistic totals are **not** reconstructed as historical time series. The details load only after expansion, one card at a time, and refresh alongside live game scores. Missing detailed data does not prevent available period scoring from appearing.
+In the initial 0.7 release, select **Game flow + stats** on any game card to expand it in the same dashboard. Game flow charts use play-by-play scoring updates when available, and otherwise use period or set scores. Clock-based updates are plotted against playing time; when times are missing the x-axis explicitly states that events are spaced in sequence. Switch between score difference and both teams’ scores. Hover, focus, or tap scoring points for values. Compare a selected team statistic, or select a player and an individual box-score statistic from available ESPN data. Player statistic totals are **not** reconstructed as historical time series. The details load only after expansion, one card at a time, and refresh alongside live game scores. Missing detailed data does not prevent available period scoring from appearing.
 
 ## Validation for scoreboard0_7
 
