@@ -9,7 +9,8 @@
     nhl:[['shotsOnGoal','Shots on goal'],['hits','Hits'],['faceoffsWon','Faceoffs won']],
     mls:[['shots','Shots'],['shotsOnTarget','Shots on target'],['corners','Corners'],['yellowCards','Yellow cards']],
     nwsl:[['shots','Shots'],['shotsOnTarget','Shots on target'],['corners','Corners'],['yellowCards','Yellow cards']],
-    tennis:[['setsWon','Sets won']]
+    tennis:[['setsWon','Sets won']],
+    atp:[['setsWon','Sets won']],wta:[['setsWon','Sets won']]
   };
   function eventTeamIndex(g,data,play,drive){
     const comps=data?.header?.competitions?.[0]?.competitors??[];

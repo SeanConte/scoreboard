@@ -30,7 +30,8 @@ def run(width):
         page.route('https://sports.core.api.espn.com/**',lambda r:r.fulfill(status=404,body=''))
         page.goto('about:blank');page.set_content(HTML,wait_until='load')
         page.locator('#date').fill('2026-10-17');page.locator('#date').dispatch_event('change')
-        page.get_by_role('tab',name='CFB').click()
+        page.locator('[data-sport="sport:football"]').click()
+        page.locator('[data-sport="cfb"]').click()
         page.get_by_text('Texas A&M',exact=False).first.wait_for(timeout=20000)
         cards=page.locator('.score-card').all_text_contents()
         assert len(cards)==2,cards

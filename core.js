@@ -9,7 +9,8 @@ const SPORTS = [
     { id: 'nhl', name: 'NHL', path: 'hockey/nhl', color: '#8ed6e8' },
     { id: 'nfl', name: 'NFL', path: 'football/nfl', color: '#cf9cff' },
     { id: 'cfb', name: 'CFB', path: 'football/college-football', color: '#ffbf69' },
-    { id: 'tennis', name: 'Grand Slams', path: 'tennis/atp', color: '#c8cc8a' },
+    { id: 'atp', name: 'ATP Tour', path: 'tennis/atp', color: '#c8cc8a' },
+    { id: 'wta', name: 'WTA Tour', path: 'tennis/wta', color: '#e9aaa3' },
 ];
 function dateInZone(date, zone) { const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(date)); return ['year', 'month', 'day'].map(k => parts.find(p => p.type === k)?.value).join('-'); }
 function val(s) { return s == null ? '—' : typeof s === 'object' ? String(s.displayValue ?? s.value ?? '—') : String(s); }
@@ -58,7 +59,7 @@ function competitionStage(text, league) {
   return '';
 }
 function competitionContext(league, event, competition, data) {
-  if(league==='tennis')return {label:'',series:''}; // Tennis already has a round line.
+  if(league==='atp'||league==='wta'||league==='tennis')return {label:'',series:''}; // Tournament and round displayed on the match card.
   const season=event.season??{};
   const slug=String(season.slug??'').toLowerCase();
   const type=Number(season.type);
@@ -93,13 +94,16 @@ function normalize(data, league, day, zone, tour) {
         throw new Error('Invalid scoreboard response');
     const games = [];
     for (const e of data.events) {
-        const tennis = league === 'tennis';
-        if (tennis && !/australian open|french open|roland.garros|wimbledon|\bu\.?s\.? open\b/i.test(e.name ?? ''))
-            continue;
-        const groups = tennis ? (e.groupings ?? []) : [{ grouping: {}, competitions: e.competitions ?? [] }];
+        const tennis = league === 'atp' || league === 'wta' || league === 'tennis';
+        const groups = tennis ? (Array.isArray(e.groupings)&&e.groupings.length?e.groupings:[{grouping:{},competitions:(e.competitions??[]).filter(c=>(c.competitors??[]).every(p=>p.athlete&&!p.team))}]) : [{ grouping: {}, competitions: e.competitions ?? [] }];
         for (const g of groups) {
-            if (tennis && g.grouping?.slug !== (tour === 'wta' ? 'womens-singles' : 'mens-singles'))
-                continue;
+            if (tennis && g.grouping?.slug) {
+                const slug=String(g.grouping.slug).toLowerCase();
+                const gender=(tour==='wta'||league==='wta')?'women':'men';
+                // Doubles, mixed, juniors, and qualifying have distinct draws.
+                // Keep the main singles draw, even if ESPN varies the slug.
+                if (!slug.includes('singles') || (gender==='women' ? /\bmen[s-]|boys/.test(slug)&&!slug.includes('women') : /women|girls/.test(slug)))continue;
+            }
             for (const c of g.competitions ?? []) {
                 const date = c.date ?? e.date;
                 if (!date || dateInZone(date, zone) !== day)
@@ -122,7 +126,7 @@ function normalize(data, league, day, zone, tour) {
                 const sit = c.situation;
                 const context=competitionContext(league,e,c,data);
                 const detail = tennis ? [g.grouping?.displayName, c.round?.displayName].filter(Boolean).join(' · ') : league === 'mlb' && state === 'in' && sit ? `${sit.outs ?? 0} out${sit.outs === 1 ? '' : 's'}${sit.balls != null ? ' · ' + sit.balls + '–' + (sit.strikes ?? 0) + ' count' : ''}` : (league === 'nfl' || league === 'cfb') && state === 'in' ? (sit?.downDistanceText ?? '') : (c.broadcasts ?? []).flatMap((b) => b.names ?? []).join(' · ');
-                games.push({ postseason:e.season?.type===3||Number(e.season?.type)===3, eventId:String(e.id??c.id), id: tennis ? `${tour}-${c.id}` : `${league}-${c.id}`, league, date, state, ...remainingTime(league,status,e.season?.type===3), status: type.shortDetail ?? type.description ?? 'Scheduled', title: tennis ? e.name : e.name ?? '', detail, context, venue: c.venue?.court ?? c.venue?.fullName ?? '', url: safeLink((e.links ?? []).find((l) => l.rel?.includes('summary'))?.href ?? e.links?.[0]?.href), sides, tennis });
+                games.push({ seasonYear:Number(e.season?.year)||null, postseason:e.season?.type===3||Number(e.season?.type)===3, eventId:String(e.id??c.id), id: tennis ? `${tour||league}-${c.id}` : `${league}-${c.id}`, league, tour:tennis?(tour||league):null, date, state, ...remainingTime(league,status,e.season?.type===3), status: type.shortDetail ?? type.description ?? 'Scheduled', title: tennis ? e.name : e.name ?? '', detail, context, venue: c.venue?.court ?? c.venue?.fullName ?? '', url: safeLink((e.links ?? []).find((l) => l.rel?.includes('summary'))?.href ?? e.links?.[0]?.href), sides, tennis });
             }
         }
     }
@@ -173,11 +177,10 @@ function gamePhase(item) {
 }
 function compareGames(a,b,mode) {
   const start=()=>Date.parse(a.game.date)-Date.parse(b.game.date)||a.game.id.localeCompare(b.game.id);
-  if(mode==='start')return start();
   if(mode==='original')return start();
   const gapA=gapOf(a.game),gapB=gapOf(b.game);
   const clockA=a.game.remainingSeconds,clockB=b.game.remainingSeconds;
-  const timed=['more','less','close-late','gap-time'].includes(mode);
+  const timed=['more','less','close-late'].includes(mode);
   const eligible=(item,gap,clock)=>gamePhase(item)===0&&(timed?Number.isFinite(clock)&&(mode==='more'||mode==='less'||!!gap):!!gap);
   const ea=eligible(a,gapA,clockA),eb=eligible(b,gapB,clockB);
   const bucket=(item,yes)=>yes?0:gamePhase(item)===0?1:gamePhase(item);
@@ -188,7 +191,6 @@ function compareGames(a,b,mode) {
   if(mode==='more')return clockB-clockA||start();
   if(mode==='less')return clockA-clockB||start();
   const minutesA=Math.max(clockA/60,1/60),minutesB=Math.max(clockB/60,1/60);
-  if(mode==='gap-time')return gapA.primary/minutesA-gapB.primary/minutesB||clockA-clockB||start();
   if(mode==='close-late')return 1/((gapB.primary+1)*minutesB)-1/((gapA.primary+1)*minutesA)||gapA.primary-gapB.primary||clockA-clockB||start();
   return start();
 }
@@ -197,12 +199,10 @@ function clockLabel(seconds) {
 }
 const SORT_MODES={
   original:{label:'Schedule order (default)',help:'Games stay in scheduled start-time order as they move from upcoming to live to finished. Live games light up in place; completed games fade. Event ID breaks ties for games with the same start time.'},
-  start:{label:'Start time · earliest first',help:'ESPN’s listed start time, earliest first, regardless of game status. This is not a separately measured actual kickoff or tipoff.'},
   closest:{label:'Closest score',help:'Live games first, smallest raw score margin first. Points, runs, and goals are compared directly; tennis uses set margin, then the latest-set game margin. These units are not equivalent across sports.'},
   more:{label:'More time left',help:'Live games with clocks first, most game-clock time remaining first. Includes all remaining regulation quarters or hockey periods; in overtime, uses only the current OT clock.'},
   less:{label:'Less time left',help:'Live games with clocks first, least game-clock time remaining first. This is playing time, not an estimate of real-world minutes until the game ends.'},
   'close-late':{label:'Close + late',help:'Highest 1 / ((score margin + 1) × minutes left) first. Smaller margins and less time both raise priority; +1 keeps ties finite. This is a viewing-priority score, not a win probability.'},
-  'gap-time':{label:'Score margin ÷ time left',help:'Lowest score margin / minutes left first. This literal ratio can favor an early close game over a late close game; Close + late is the option that rewards both closeness and lateness.'},
 };
 
 // Everything runs in the browser. No server, framework, secret, or build is needed.
@@ -213,9 +213,9 @@ const SORT_MODES={
   const MIN_DAY = '1900-01-02', MAX_DAY = '2100-12-30';
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Denver';
   const defs = [
-    ...SPORTS.filter(s=>s.id!=='tennis').map(s=>({...s,key:s.id,label:s.name})),
-    {id:'tennis',key:'atp',path:'tennis/atp',tour:'atp',label:'Men’s singles'},
-    {id:'tennis',key:'wta',path:'tennis/wta',tour:'wta',label:'Women’s singles'},
+    ...SPORTS.filter(s=>!['tennis','atp','wta'].includes(s.id)).map(s=>({...s,key:s.id,label:s.name})),
+    {id:'atp',key:'atp',path:'tennis/atp',tour:'atp',label:'ATP singles'},
+    {id:'wta',key:'wta',path:'tennis/wta',tour:'wta',label:'WTA singles'},
   ];
   const $ = id=>document.getElementById(id);
   const escapeHTML = value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -225,9 +225,109 @@ const SORT_MODES={
   function dayShift(day,n) {return new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);}
   function validDay(day) {return /^\d{4}-\d{2}-\d{2}$/.test(day)&&day>=MIN_DAY&&day<=MAX_DAY&&Number.isFinite(Date.parse(day))&&new Date(day).toISOString().slice(0,10)===day;}
   let day=dateInZone(new Date(),zone),selected='all',followToday=true,revision=0,busy=false,lastCheck=0;
-  let sortMode='original',grouped=true;
-  try {const pref=JSON.parse(localStorage.getItem('scoreboard-sort-v1')||'{}');if(SORT_MODES[pref.sort])sortMode=pref.sort;if(typeof pref.grouped==='boolean')grouped=pref.grouped;}catch{}
-  function saveView(){try{localStorage.setItem('scoreboard-sort-v1',JSON.stringify({sort:sortMode,grouped}));}catch{}}
+  let sortMode='original',grouped=true,liveOnly=false;
+  // Independent local preferences. Pins belong to a calendar day; teams are
+  // identified by league and stable ESPN team ID (never a display name).
+  const FAVORITES_KEY='scoreboard-favorites-v1';
+  let pinnedByDay={},favoriteTeams=new Set();
+  try {
+    const saved=JSON.parse(localStorage.getItem(FAVORITES_KEY)||'{}');
+    if(saved.pins&&typeof saved.pins==='object'&&!Array.isArray(saved.pins))for(const [date,entries] of Object.entries(saved.pins)){
+      if(validDay(date)&&Array.isArray(entries))pinnedByDay[date]=[...new Set(entries.filter(x=>typeof x==='string'&&/^[a-z0-9-]+:[a-z0-9-]+$/i.test(x)))].slice(0,100);
+    }
+    if(Array.isArray(saved.teams))favoriteTeams=new Set(saved.teams.filter(x=>typeof x==='string'&&/^[a-z0-9-]+:\d+$/i.test(x)));
+  } catch {}
+  const gameKey=g=>`${g.league}:${g.id}`;
+  const sideKey=(league,id)=>`${league}:${id}`;
+  const isPinned=g=>(pinnedByDay[day]??[]).includes(gameKey(g));
+  const isFavoriteTeam=(league,id)=>favoriteTeams.has(sideKey(league,id));
+  const isFavoriteGame=g=>!g.tennis&&g.sides.some(s=>isFavoriteTeam(g.league,s.id));
+  function saveFavorites(){
+    try{
+      // Limit history growth while allowing revisit of pinned prior dates.
+      const dates=Object.keys(pinnedByDay).sort().slice(-120),pins={};
+      for(const d of dates)if(pinnedByDay[d]?.length)pins[d]=pinnedByDay[d];
+      pinnedByDay=pins;
+      localStorage.setItem(FAVORITES_KEY,JSON.stringify({pins,teams:[...favoriteTeams]}));
+    }catch{}
+  }
+  function togglePin(g){
+    const key=gameKey(g),set=new Set(pinnedByDay[day]??[]);
+    if(set.has(key))set.delete(key);else set.add(key);
+    if(set.size)pinnedByDay[day]=[...set];else delete pinnedByDay[day];
+    // A featured copy can disappear on unpin; keep an already expanded game
+    // open in its regular league card rather than losing its detail panel.
+    if(expandedGame===g.id&&expandedCopy==='pinned'&&!set.has(key))expandedCopy='original';
+    saveFavorites();render();
+  }
+  function toggleTeamFavorite(league,id){
+    if(!SPORTS.some(s=>s.id===league)||['atp','wta'].includes(league)||!/^\d+$/.test(String(id)))return;
+    const key=sideKey(league,id);
+    if(favoriteTeams.has(key))favoriteTeams.delete(key);else favoriteTeams.add(key);
+    if(expandedCopy==='favorites'&&expandedGame){
+      const game=findGame(expandedGame);
+      if(game&&!isFavoriteGame(game))expandedCopy='original';
+    }
+    saveFavorites();render();if(teamMode)renderTeamPage();if(!busy)refresh();
+  }
+  try {const pref=JSON.parse(localStorage.getItem('scoreboard-sort-v1')||'{}');const migrated={start:'original','gap-time':'close-late'}[pref.sort]??pref.sort;if(SORT_MODES[migrated])sortMode=migrated;if(typeof pref.grouped==='boolean')grouped=pref.grouped;if(typeof pref.liveOnly==='boolean')liveOnly=pref.liveOnly;}catch{}
+  function saveView(){try{localStorage.setItem('scoreboard-sort-v1',JSON.stringify({sort:sortMode,grouped,liveOnly}));}catch{}}
+  // League layout is independent of dates and of the existing sort preferences.
+  // Stable league IDs, not display names or positions, are persisted to the browser.
+  const leagueIds=SPORTS.map(s=>s.id);
+  let leagueOrder=[...leagueIds],collapsedLeagues=new Set(),hiddenLeagues=new Set();
+  try {
+    const layout=JSON.parse(localStorage.getItem('scoreboard-layout-v1')||'{}');
+    if(Array.isArray(layout.order)) {
+      // Existing browser settings used one 'tennis' row for both tours.
+      const migrated=layout.order.flatMap(id=>id==='tennis'?['atp','wta']:[id]);
+      const known=migrated.filter((id,i)=>leagueIds.includes(id)&&migrated.indexOf(id)===i);
+      leagueOrder=[...known,...leagueIds.filter(id=>!known.includes(id))];
+      // One-time default-order correction: WNBA before NBA. Reordering after
+      // this migration remains fully user-controlled in Settings.
+      if(layout.orderRevision!==30){
+        const w=leagueOrder.indexOf('wnba'),n=leagueOrder.indexOf('nba');
+        if(w>n){leagueOrder.splice(w,1);leagueOrder.splice(n,0,'wnba');}
+      }
+    }
+    const expandTennis=ids=>ids.flatMap(id=>id==='tennis'?['atp','wta']:[id]);
+    if(Array.isArray(layout.collapsed))collapsedLeagues=new Set(expandTennis(layout.collapsed).filter(id=>leagueIds.includes(id)));
+    if(Array.isArray(layout.hidden))hiddenLeagues=new Set(expandTennis(layout.hidden).filter(id=>leagueIds.includes(id)));
+    if(Array.isArray(layout.order)&&layout.orderRevision!==30)try{localStorage.setItem('scoreboard-layout-v1',JSON.stringify({order:leagueOrder,collapsed:[...collapsedLeagues],hidden:[...hiddenLeagues],orderRevision:30}));}catch{}
+    if(hiddenLeagues.size===leagueIds.length)hiddenLeagues.delete(leagueIds[0]);
+  } catch {} // A corrupt or blocked browser preference must not prevent scores from loading.
+  const orderedSports=()=>leagueOrder.filter(id=>!hiddenLeagues.has(id)).map(id=>SPORTS.find(s=>s.id===id));
+  const SPORT_FAMILIES=[
+    {id:'basketball',name:'Basketball',icon:'🏀',leagues:['wnba','nba']},
+    {id:'baseball',name:'Baseball',icon:'⚾',leagues:['mlb']},
+    {id:'soccer',name:'Soccer',icon:'⚽',leagues:['nwsl','mls']},
+    {id:'hockey',name:'Hockey',icon:'🏒',leagues:['nhl']},
+    {id:'football',name:'Football',icon:'🏈',leagues:['nfl','cfb']},
+    {id:'tennis',name:'Tennis',icon:'🎾',leagues:['atp','wta']},
+  ];
+  const familyFor=id=>SPORT_FAMILIES.find(f=>f.leagues.includes(id));
+  const visibleLeagueIds=()=>orderedSports().filter(s=>selected==='all'||selected===s.id||selected==='sport:'+familyFor(s.id)?.id).map(s=>s.id);
+  // Keep actively followed games fresh even when their sport tab isn't open.
+  const neededLeagueIds=()=>new Set([...visibleLeagueIds(),
+    ...[...favoriteTeams].map(x=>x.split(':')[0]),
+    ...(pinnedByDay[day]??[]).map(x=>x.split(':')[0])].filter(id=>!hiddenLeagues.has(id)));
+  function resetSelectionIfHidden(){if(selected!=='all'&&!visibleLeagueIds().length)selected='all';}
+
+  function saveLeagueLayout(){
+    try{localStorage.setItem('scoreboard-layout-v1',JSON.stringify({order:leagueOrder,collapsed:[...collapsedLeagues],hidden:[...hiddenLeagues],orderRevision:30}));}catch{}
+  }
+  function moveLeague(source,target,after=false){
+    if(source===target||!leagueIds.includes(source)||!leagueIds.includes(target))return false;
+    const order=leagueOrder.filter(id=>id!==source);
+    order.splice(order.indexOf(target)+(after?1:0),0,source);
+    if(order.every((id,i)=>leagueOrder[i]===id))return false;
+    leagueOrder=order;saveLeagueLayout();return true;
+  }
+  function moveLeagueBy(source,direction){
+    const index=leagueOrder.indexOf(source),next=index+direction;
+    if(index<0||next<0||next>=leagueOrder.length)return false;
+    return moveLeague(source,leagueOrder[next],direction>0);
+  }
   let controller=new AbortController();
   let feeds=new Map();
   const cache=new Map();
@@ -323,7 +423,8 @@ const SORT_MODES={
     if(busy||document.hidden)return;
     if(!navigator.onLine){updateStatus();return;}
     const token=revision,signal=controller.signal,snapshotDay=day;
-    const needed=defs.filter(d=>selected==='all'||d.id===selected).filter(d=>force||Date.now()>=(feeds.get(d.key)?.nextTry??0));
+    const neededIds=neededLeagueIds();
+    const needed=defs.filter(d=>neededIds.has(d.id)).filter(d=>force||Date.now()>=(feeds.get(d.key)?.nextTry??0));
     if(!needed.length){updateStatus();return;}
     busyState(true);
     for(const def of needed){const f=feeds.get(def.key)||emptyFeed();f.loading=true;feeds.set(def.key,f);}
@@ -347,7 +448,12 @@ const SORT_MODES={
             console.warn('CFB supplement unavailable.',error);
           }
         }
-        const games=payloads.flatMap(data=>normalize(data,def.id,snapshotDay,zone,def.tour));
+        // A game can appear in more than one adjacent-date response. Prefer
+        // the most recently received copy; otherwise a stale cached neighbor
+        // can overwrite a newly fetched score during live monitoring.
+        const games=payloads.map((data,i)=>({data,at:results[i]?.receivedAt??Date.now()}))
+          .sort((a,b)=>a.at-b.at)
+          .flatMap(({data})=>normalize(data,def.id,snapshotDay,zone,def.tour));
         if(token!==revision)return;
         feeds.set(def.key,{games:[...new Map(games.map(g=>[g.id,g])).values()],receivedAt:Math.min(...results.map(r=>r.receivedAt)),error:'',coverageWarning,failures:0,nextTry:0,loading:false});
       } catch(error) {
@@ -362,11 +468,15 @@ const SORT_MODES={
     const open=findGame(expandedGame);if(open)loadExpanded(open);
     const failed=needed.filter(d=>feeds.get(d.key)?.error).length;
     $('announcer').textContent=failed?'Refresh completed. Some scores are unavailable.':'Scores checked at '+time(lastCheck)+'.';
+    // A team may have been favorited during this refresh. Pick up its feed
+    // immediately instead of waiting for the next 30-second timer cycle.
+    if(defs.some(d=>neededLeagueIds().has(d.id)&&!feeds.has(d.key)))queueMicrotask(()=>{if(token===revision&&!busy)refresh();});
   }
   function changeDay(next) {
     if(!validDay(next)){$('date').value=day;return;}
     followToday=next===dateInZone(new Date(),zone);
     if(next===day){refresh(true);return;}
+    if(monitorDialog.open)closeMonitor();
     controller.abort();revision++;controller=new AbortController();
     expandedGame='';expandedState.clear();summaryCache.clear();day=next;feeds=new Map();lastCheck=0;busyState(false);updateDate();render();refresh();
   }
@@ -377,13 +487,11 @@ const SORT_MODES={
     $('previous').disabled=day===MIN_DAY;$('next').disabled=day===MAX_DAY;
   }
   function selectTab(id) {
-    if(!['all',...SPORTS.map(s=>s.id)].includes(id))return;
+    if(!['all',...SPORTS.map(s=>s.id),...SPORT_FAMILIES.map(f=>'sport:'+f.id)].includes(id))return;
+    if(id!=='all'&&!orderedSports().some(s=>id===s.id||id==='sport:'+familyFor(s.id)?.id))return;
     selected=id;
-    for(const button of $('sport-tabs').querySelectorAll('[role="tab"]')) {
-      const active=button.dataset.sport===id;
-      button.setAttribute('aria-selected',String(active));button.dataset.state=active?'active':'inactive';button.tabIndex=active?0:-1;
-    }
-    $('scores-panel').setAttribute('aria-labelledby','tab-'+id);render();
+    paintSportTabs();
+    $('scores-panel').setAttribute('aria-label',id==='all'?'All sports':id.startsWith('sport:')?id.slice(6)+' leagues':id.toUpperCase());render();
     // The active refresh finishes its current requests. Start any newly needed feeds next.
     if(!busy)refresh();
   }
