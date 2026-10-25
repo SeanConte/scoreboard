@@ -830,10 +830,13 @@
       const subtitle=items.length?`${items.length} ${['atp','wta'].includes(s.id)?'matches':'games'}${incomplete?' · incomplete':''}`:['atp','wta'].includes(s.id)?'Singles · all available tour events':s.id==='cfb'?'FBS · all rankings':'Daily schedule';
       let content;
       if(items.length)content=`<div class="games-grid">${items.map(i=>card(i.game,i.stale)).join('')}</div>`;
-      else if(liveOnly&&!pending)content=`<div class="empty-state"><span class="empty-dash">—</span><div><p>No live games in ${esc(s.name)}</p><span>Turn off the live-only filter to see scheduled and final games.</span></div></div>`;
+      else if(liveOnly&&!pending&&!errors.length)content=`<div class="empty-state"><span class="empty-dash">—</span><div><p>No live games in ${esc(s.name)}</p><span>Turn off the live-only filter to see scheduled and final games.</span></div></div>`;
       else if(pending)content=`<div class="empty-state loading-state"><span class="empty-dash">···</span><div><p>Loading ${esc(s.name)} scores…</p><span>Connecting to ESPN.</span></div></div>`;
       else content=`<div class="empty-state"><span class="empty-dash">—</span><div><p>${errors.length?'Waiting for scores':['atp','wta'].includes(s.id)?'No singles matches listed':'No games listed for this date'}</p><span>${errors.length?'Automatic retries are on. You can also use Refresh.':['atp','wta'].includes(s.id)?'Tour tournaments, including Grand Slams, Masters/1000s and other available events.':'Choose another date to see the schedule.'}</span></div></div>`;
-      const collapsed=collapsedLeagues.has(s.id);
+      // Live-only always exposes matching cards even if a league was collapsed
+      // in the normal scoreboard. The stored collapse preference is untouched.
+      const collapsed=collapsedLeagues.has(s.id)&&!(liveOnly&&items.length);
+      if(liveOnly&&!items.length&&!incomplete)return '';
       return `<section class="league-section ${collapsed?'league-is-collapsed':''}" data-league="${s.id}" style="--league-color:${s.color}" aria-label="${esc(s.name)}"><div class="league-heading"><div class="league-heading-main"><h2><button type="button" class="league-collapse" data-collapse-league="${s.id}" aria-expanded="${!collapsed}" aria-controls="league-content-${s.id}" aria-label="${collapsed?'Expand':'Collapse'} ${esc(s.name)}"><span class="league-bar" aria-hidden="true"></span>${esc(s.name)}<span class="league-chevron" aria-hidden="true">⌄</span></button></h2></div><span class="league-subtitle">${subtitle}</span></div><div class="league-content" id="league-content-${s.id}" ${collapsed?'hidden':''}>${collapsed?'':notices+content}</div></section>`;
     }).join('');
     const across=!grouped&&(selected==='all'||selected.startsWith('sport:'));
@@ -860,7 +863,8 @@
     const favoriteItems=eligible.filter(i=>!isPinned(i.game)&&isFavoriteGame(i.game)).sort((a,b)=>compareGames(a,b,sortMode));
     const featured=(label,items,slug,icon)=>items.length?`<section class="featured-games featured-${slug}" aria-label="${label}"><div class="featured-heading"><h2><span class="featured-symbol" aria-hidden="true">${icon}</span> ${label}</h2><span>${items.length} ${items.length===1?'game':'games'} · Also listed in their leagues</span></div><div class="games-grid">${items.map(i=>card(i.game,i.stale,false,slug)).join('')}</div></section>`:'';
     const featuredHTML=featured('Pinned games',pinnedItems,'pinned','⌖')+featured('Favorite teams',favoriteItems,'favorites','★');
-    $('scores-panel').innerHTML=featuredHTML+(across?`<section class="league-section" aria-label="All games sorted together">${allNotices.join('')}${waiting.length?`<p class="loading-summary">Loading ${esc(waiting.join(', '))}…</p>`:''}${allItems.length?`<div class="games-grid">${allItems.map(i=>card(i.game,i.stale)).join('')}</div>`:waiting.length?'':`<div class="empty-state"><span class="empty-dash">—</span><div><p>${liveOnly?'No live games in this selection':unknown?'Waiting for scores':'No games listed for this date'}</p><span>${liveOnly?'Turn off the live-only filter to see the full schedule.':unknown?'Automatic retries are on.':'Choose another date to see the schedule.'}</span></div></div>`}</section>`:groupedHTML);
+    const noLiveMessage=liveOnly&&!live&&!unknown?'<div class="empty-state" role="status"><span class="empty-dash">—</span><div><p>No live games in this selection</p><span>Turn off the live-only filter to see all games.</span></div></div>':'';
+    $('scores-panel').innerHTML=featuredHTML+(across?`<section class="league-section" aria-label="All games sorted together">${allNotices.join('')}${waiting.length?`<p class="loading-summary">Loading ${esc(waiting.join(', '))}…</p>`:''}${allItems.length?`<div class="games-grid">${allItems.map(i=>card(i.game,i.stale)).join('')}</div>`:waiting.length?'':`<div class="empty-state"><span class="empty-dash">—</span><div><p>${liveOnly&&!unknown?'No live games in this selection':unknown?'Live status temporarily unavailable':'No games listed for this date'}</p><span>${liveOnly&&!unknown?'Turn off the live-only filter to see the full schedule.':unknown?'A feed is missing or stale. Automatic retries are on.':'Choose another date to see the schedule.'}</span></div></div>`}</section>`:groupedHTML+noLiveMessage);
     $('sort-scope').textContent=across?'All visible leagues, sorted together. Enable grouping for collapsible league sections.':'Sorting within each visible league.';
     $('sort-description').textContent=SORT_MODES[sortMode].help;
     $('group-sports').disabled=selected!=='all'&&!selected.startsWith('sport:');
@@ -872,7 +876,7 @@
       const button=$(id);
       button.setAttribute('aria-pressed',String(liveOnly));
       button.setAttribute('aria-label',liveOnly?'Show all games':'Show live games only');
-      button.title=liveOnly?'Show scheduled, live and finished games':'Show live games only';
+      button.title=(liveOnly?'Show scheduled, live and finished games':'Show live games only')+(unknown?' (some feeds are incomplete)':'');
       button.classList.toggle('is-active',liveOnly);
     }
     queueStickyCounter();
@@ -903,6 +907,7 @@
   }
   for(const id of ['live-filter-main','live-filter-sticky'])$(id).addEventListener('click',()=>{
     liveOnly=!liveOnly;saveView();render();
+    if(liveOnly)refresh();
     $(id).focus({preventScroll:true});
     $('announcer').textContent=liveOnly?'Showing live games only.':'Showing all games.';
   });
@@ -912,13 +917,14 @@
   $('group-sports').addEventListener('change',()=>{grouped=$('group-sports').checked;saveView();render();});
   function paintSportTabs(){
     // Only one navigation: family icons reveal their leagues in-place.
+    // Keep the sport icon in place when expanded; ALL precedes it.
     const families=SPORT_FAMILIES.filter(f=>f.leagues.some(id=>!hiddenLeagues.has(id))).sort((a,b)=>Math.min(...a.leagues.filter(id=>!hiddenLeagues.has(id)).map(id=>leagueOrder.indexOf(id)))-Math.min(...b.leagues.filter(id=>!hiddenLeagues.has(id)).map(id=>leagueOrder.indexOf(id))));
     let tabs=`<button type="button" role="tab" id="tab-all" aria-selected="${selected==='all'}" data-sport="all" data-state="${selected==='all'?'active':'inactive'}" class="sport-all" aria-label="All sports" title="All sports">All</button>`;
     for(const family of families){
       const expanded=selected==='sport:'+family.id||family.leagues.includes(selected);
       const leagueItems=leagueOrder.filter(id=>family.leagues.includes(id)&&!hiddenLeagues.has(id));
       const isSelected=selected==='sport:'+family.id;
-      tabs+=`<div class="sport-family ${expanded?'family-expanded':''}" data-family="${family.id}"><button type="button" role="tab" id="tab-sport-${family.id}" aria-selected="${isSelected}" data-sport="sport:${family.id}" data-state="${isSelected?'active':expanded?'family':'inactive'}" title="${expanded?'All':'Show'} ${esc(family.name)} leagues" aria-label="${expanded?'All':'Show'} ${esc(family.name)} leagues" class="sport-family-trigger">${expanded?'<span class="family-all-label">ALL</span>':`<span class="sport-symbol" aria-hidden="true">${family.icon}</span>`}</button>${expanded?leagueItems.map(id=>{const sport=SPORTS.find(s=>s.id===id);return `<button type="button" role="tab" id="tab-${id}" data-sport="${id}" data-state="${selected===id?'active':'inactive'}" aria-selected="${selected===id}" title="${esc(sport.name)}" class="league-nav-choice">${esc(sport.name)}</button>`;}).join(''):''}</div>`;
+      tabs+=`<div class="sport-family ${expanded?'family-expanded':''}" data-family="${family.id}">${expanded?`<button type="button" role="tab" data-sport="sport:${family.id}" aria-selected="${isSelected}" data-state="${isSelected?'active':'inactive'}" class="family-all-choice" title="All ${esc(family.name)} leagues" aria-label="All ${esc(family.name)} leagues">ALL</button>`:''}<button type="button" id="tab-sport-${family.id}" data-sport="sport:${family.id}" data-state="${expanded?'family':'inactive'}" title="${esc(family.name)}" aria-label="${esc(family.name)}" class="sport-family-trigger"><span class="sport-symbol" aria-hidden="true">${family.icon}</span></button>${expanded?leagueItems.map(id=>{const sport=SPORTS.find(s=>s.id===id);return `<button type="button" role="tab" id="tab-${id}" data-sport="${id}" data-state="${selected===id?'active':'inactive'}" aria-selected="${selected===id}" title="${esc(sport.name)}" class="league-nav-choice">${esc(sport.name)}</button>`;}).join(''):''}</div>`;
     }
     $('sport-tabs').innerHTML=tabs;
   }

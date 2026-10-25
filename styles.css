@@ -218,6 +218,8 @@
 .sport-tabs .family-all-label{font-size:10px;letter-spacing:.09em;font-weight:850}
 .sticky-score-nav .sport-tabs .family-expanded .sport-family-trigger{min-width:43px;color:#efcb87}
 .sticky-score-nav .sport-tabs .league-nav-choice{padding:0 10px;min-width:38px;font-weight:700;font-size:11px}
+.sticky-score-nav .sport-tabs .family-all-choice{min-width:39px;font-size:10px;font-weight:800;letter-spacing:.045em;padding:0 7px}
+.sticky-score-nav .sport-tabs .family-expanded .sport-family-trigger{background:transparent;border-color:transparent;box-shadow:none;min-width:36px}
 .sticky-nav-actions{display:flex;align-items:center;gap:10px;flex:0 0 auto}
 .sticky-score-nav .date-controls{display:flex;align-items:center;gap:3px;flex:none;padding:3px;border:1px solid #4c473d;border-radius:8px;background:#1d1c19}
 .sticky-score-nav .date-controls button,.settings-trigger{display:inline-flex;align-items:center;justify-content:center;flex:none;height:35px;min-width:32px;border:0;border-radius:5px;background:transparent;color:#ded8cf;font:600 19px/1 Arial,Helvetica,sans-serif}
@@ -756,4 +758,26 @@ button.stat-match .stat-match-values>span>span{color:#e1be82;font-size:11px}
  .featured-heading>span{width:100%}
  .live-count.live-filter-button{margin-top:10px;padding:9px 11px}
  .pin-game-button{padding:4px 6px}
+}
+
+/* 0_35 — on narrow screens, navigation gets a full row. The sticky
+   live counter uses the open space opposite the date controls below. */
+@media(max-width:760px){
+ .sticky-score-nav{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:6px;row-gap:5px;align-items:center;min-height:89px}
+ .sticky-score-nav .sport-tabs,.sticky-score-nav.has-sticky-count .sport-tabs{grid-column:1/-1;grid-row:1;order:initial;width:100%;max-width:100%;min-width:0;flex-basis:auto;min-height:43px;height:45px;padding-right:2px}
+ .sticky-score-nav .sticky-live-summary,.sticky-score-nav .sticky-live-summary.live-filter-button{grid-row:2;grid-column:1;justify-self:start;position:static;left:auto;right:auto;top:auto;transform:none;margin:0;padding:6px 8px;font-size:10px;gap:4px;max-width:100%}
+ .sticky-score-nav.has-sticky-count .sticky-live-summary{display:inline-flex}
+ .sticky-score-nav .sticky-nav-actions,.sticky-score-nav.has-sticky-count .sticky-nav-actions{grid-row:2;grid-column:2;justify-self:end;width:auto;order:initial;margin:0}
+ .sticky-score-nav .sticky-nav-actions{gap:5px}
+ .sticky-score-nav .sport-tabs .family-expanded .sport-family-trigger{min-width:32px}
+}
+@media(max-width:420px){
+ .sticky-score-nav .date-picker input{width:108px}
+ .sticky-score-nav .date-controls button{min-width:27px}
+ .sticky-score-nav .date-controls .today-button{padding:0 5px}
+ .sticky-score-nav .settings-trigger{width:33px;min-width:33px}
+}
+@media(max-width:355px){
+ .sticky-score-nav.has-sticky-count .sticky-live-summary{grid-row:3;grid-column:1/-1;justify-self:center}
+ .sticky-score-nav .sticky-nav-actions{grid-column:1/-1;justify-self:end}
 }

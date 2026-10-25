@@ -45,12 +45,12 @@ with sync_playwright() as p:
     assert saved['order'][:2]==['nba','wnba'] and 'nba' in saved['collapsed'] and 'mlb' in saved['hidden'],saved
     page.locator('#settings-done').click()
     # Selecting the basketball family opens NBA/WNBA alongside an ALL-family control.
-    page.locator('[data-sport="sport:basketball"]').click()
+    page.locator('.sport-family[data-family="basketball"] .sport-family-trigger').click()
     assert set(order())=={'nba','wnba'}
-    assert page.locator('.sport-family[data-family="basketball"] .family-all-label').inner_text()=='ALL'
+    assert page.locator('.sport-family[data-family="basketball"] .family-all-choice').inner_text()=='ALL'
     page.locator('[data-sport="nba"]').click()
     assert order()==['nba']
-    page.locator('[data-sport="sport:basketball"]').click()
+    page.locator('.sport-family[data-family="basketball"] .family-all-choice').click()
     assert set(order())=={'nba','wnba'}
     page.locator('[data-sport="all"]').click()
     assert len(order())==9

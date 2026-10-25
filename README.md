@@ -1,18 +1,30 @@
-# Scoreboard 0.32
+# Scoreboard 0.35
 
 A browser-based, static sports scoreboard. `index.html` is the deployable file for GitHub Pages and can be opened directly. No account or application server is required. Live scores and expanded statistics still require access to ESPN's public feeds (including their CORS availability).
 
-The release history is recorded in [`CHANGELOG.md`](CHANGELOG.md), with versions **0_18**, **0_20**, and **0_26** explicitly flagged as important recovery points.
+The release history and earlier rollback reference notes are recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
-## Important rollback checkpoints (preserve these versions)
+## 0.35 — Coverage audits and mobile navigation
 
-| Version | Why preserve it |
-| --- | --- |
-| **0_18 — IMPORTANT** | Reliability baseline: consolidated feed, historical play and normalization safeguards. |
-| **0_20 — IMPORTANT** | Stable customizable scoreboard layout, persistent league order and sticky sports navigation. |
-| **0_26 — IMPORTANT** | Mature game-detail/full-screen monitor before introducing team-season pages. |
+- A quiet, rate-limited broad-month audit supplements each non-CFB league's existing daily schedule when ESPN omits a listed matchup. The daily live scores remain authoritative, and supplemental failures never block them.
+- Same-game duplicates are merged by event ID and selected date. Confirmed additional games appear automatically; if only the backup works, the scoreboard states that coverage is incomplete.
+- The family **ALL** selector sits before the persistent sport icon when leagues are expanded. Mobile now uses a full row for sport navigation and puts the sticky live/total counter opposite the date controls below it, without changing desktop layout.
+- The HTML, sources, changelog, and test scripts are included in the GitHub ZIP.
 
-These are deliberate comparison/recovery milestones. Newer versions do not replace these reference releases.
+## 0.34 — More complete college football schedules
+
+- CFB now checks three ESPN sources of FBS games rather than treating one `groups=80` result as exhaustive: the FBS roll-up, the ranked-game schedule, and the SEC conference scoreboard, with other FBS conferences audited in rotating batches. The Ole Miss–Texas October 24, 2026 missing-game case is a regression test, not a hardcoded matchup.
+- Main FBS games render independently of the FCS/standings supplement. Partial adjacent-day failures retain successful scoreboard data; missing FBS games can be recovered from independently verified ESPN feeds.
+- Recovered live CFB games count as live and remain visible with **Live only** enabled. Missing-game sources are refreshed at live-game cadence when necessary; the league displays coverage warnings where incomplete.
+- The primary scoreboard, game monitors, teams, favorites, pins, local settings, and versioned changelog remain intact. All 20 offline browser test files passed, including new missing-game scenarios. Live ESPN endpoints were not independently reachable from the test environment.
+
+## 0.33 — Live refresh reliability and counter/filter consistency
+
+- **Single consistent live view:** a league with a matching live game is automatically expanded while the live-only filter is on; toggling off restores its independently saved collapsed state. Leagues without live matches are omitted from live-only sections, and incomplete feeds are not mistaken for confirmed zero-live schedules.
+- **Independent league updates:** an unresponsive league no longer blocks status updates for a different league, including after changing tabs or favoriting a team. Per-league requests are deduplicated; a manual refresh during an active check queues one follow-up only for that same league, not a new refresh storm across all sports.
+- **Live transitions and feed cache:** during simultaneous adjacent-date results, Final takes precedence over In Progress over Scheduled, then the freshest snapshot is used. Explicit Refresh bypasses cached scoreboard requests; live games that appear on adjacent calendar-day feeds receive the same short cache duration as live games on today's feed.
+- **Unified status feedback:** both live counters and the live-only card filter use the same current game phase and stale-feed rules. Unavailable/stale data is labeled incomplete, rather than falsely claiming there are no live games. The selected live-only filter and all pins/team favorites remain unchanged in localStorage.
+- **Testing:** added desktop/mobile fixture coverage for collapsed live leagues, count-to-card parity, concurrent slow and fast feeds, live-to-final transitions, and repeat manual refresh without request storms. All 19 test files were checked: 18 passed during the concurrent run, and the single long-running season-tooltip test passed separately; key suites were also rerun after the final refresh-queue adjustment. Offline tests do not verify real-time ESPN service uptime.
 
 ## 0.32 — Daily pinned games and favorite teams
 
@@ -31,7 +43,6 @@ These are deliberate comparison/recovery milestones. Newer versions do not repla
 - When the main scoreboard heading leaves the screen, its **live / total** count appears in the sticky sport/date navigation. In 0_32 it also serves as the live-only toggle, and its tally includes distinct featured games from other selected-followed sports without double-counting.
 - Each game card now offers two centered controls along its bottom edge: **Expanded card** (toggles the inline figures and stats) and **Full screen** (opens the existing game monitor directly, even without first expanding the card). The separate launcher inside the expanded detail panel is removed. Existing graphs, box scores, metric preferences, and keyboard accessible return controls are unchanged.
 - Desktop and mobile fixture tests cover schedule highlight states, team accents, chart crests and tooltips, sticky counter, both game buttons and direct full-screen behavior. Earlier league/monitor tests were also rerun. This does not independently certify all live ESPN endpoints.
-- Still preserve **0_18**, **0_20**, and **0_26** as important rollback checkpoints. The 0_30 WNBA/NBA preference migration has not been repeated or altered.
 
 ## 0.30 — ATP/WTA tennis and player event links
 
@@ -39,7 +50,6 @@ These are deliberate comparison/recovery milestones. Newer versions do not repla
 - The default ordering keeps **WNBA ahead of NBA**. Existing stored league layouts migrate once; future manual order changes are honored. Settings retain visibility, drag/reorder, collapsed sections and reset.
 - **Group by league** describes the league sections, and the Settings control now uses an even eight-tooth gear icon.
 - Fullscreen player highlighting is still off by default. Verified player events can now highlight points for NBA/WNBA, football scoring contributors, NHL scoring/shots, soccer scoring/shots and MLB hit/home run statistics. Unverified attribution is not shown; database-backed live event availability varies among leagues.
-- 0_18, 0_20 and 0_26 remain the important rollback checkpoints.
 
 ## 0.27 — Team identity and season schedules
 
@@ -73,7 +83,7 @@ Edit the appropriate source JavaScript file or `src/styles.css`, then run `pytho
 
 ## Architecture
 
-1. Discovery: ESPN scoreboard feeds, three candidate dates to handle time-zone rollover; FBS–FCS supplement is included only for teams confirmed in the FBS standings registry. Supplemental failure produces a visible coverage warning.
+1. Discovery: ESPN scoreboard feeds and adjacent dates to handle timezone rollover. For CFB, independent ranked and conference snapshots reconcile gaps in the FBS group-80 roll-up; the FBS–FCS supplement is included only for teams confirmed in the FBS standings registry. Partial responses remain visible and supplemental failure is identified.
 2. Normalization: stable league-specific game objects, team IDs, clocks, ranks, status and scores.
 3. Detail requests: loaded only for expanded games, using one queued, timeout-and-abort-aware JSON transport. Some sports optionally request paginated event feeds.
 4. Sport adapters: interpret event types and assign team and axis positions. Basketball and football use summary plays/drives; baseball, hockey, and soccer use available play-by-play.
@@ -170,4 +180,3 @@ The test fixtures simulate ESPN-shaped responses and do not validate live ESPN A
 - **Season statistic links**: Selecting a scored/allowed/differential summary tile switches the per-game season chart to the matching measure. A small selector can restore both series; official season aggregate categories remain separate and are **not** misrepresented as game-by-game histories.
 - **Game statistic links**: Where the same quantity is genuinely available as a supported event-derived time series, clickable team-stat comparison rows switch the game graph to that statistic. The full Box Score's corresponding team-stat name links back to the Overview with the chosen chart metric. Tennis set and game totals are linked to corresponding match charts.
 - **Semantic checks across leagues**: NBA, WNBA, NFL, CFB, MLB, NHL, MLS, NWSL and tennis; unsupported/unverified histories, percentages, composite shooting stats and ambiguous pitching/batting strikeouts do **not** offer misleading links. Corrected football seasons for January/February games without a feed-supplied season year.
-- **Data integrity**: User's preexisting local browser preferences, scoreboard cards, game detail summaries, full-window monitor, live refresh, graph geometries, season pages and important rollback releases (0_18, 0_20, 0_26) remain unchanged. Offline browser fixtures test interactions and data shapes, not every current live ESPN endpoint.

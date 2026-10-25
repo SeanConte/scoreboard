@@ -1,0 +1,100 @@
+"""0_35: secondary schedule completeness for non-CFB, permanent family icons, mobile sticky header."""
+from pathlib import Path
+from datetime import datetime,timedelta
+from zoneinfo import ZoneInfo
+from playwright.sync_api import sync_playwright
+import json
+HTML=Path(__file__).resolve().parents[1].joinpath('index.html').read_text()
+now=datetime.now(ZoneInfo('America/Denver'))
+day=now.strftime('%Y-%m-%d')
+kickoff=now.replace(hour=15,minute=30,second=0,microsecond=0).isoformat()
+other=(now+timedelta(days=3)).replace(hour=15,minute=30,second=0,microsecond=0).isoformat()
+paths={'wnba':'basketball/wnba','nba':'basketball/nba','mlb':'baseball/mlb','nwsl':'soccer/usa.nwsl','mls':'soccer/usa.1','nhl':'hockey/nhl','nfl':'football/nfl','atp':'tennis/atp','wta':'tennis/wta'}
+
+def game(eid,stamp=kickoff):
+    c={'id':str(eid),'date':stamp,'status':{'type':{'state':'in','shortDetail':'Q2 6:10'}},'competitors':[{'homeAway':'away','team':{'id':str(eid*2),'displayName':f'Visitor {eid}','abbreviation':'AWY'},'score':'27'}, {'homeAway':'home','team':{'id':str(eid*2+1),'displayName':f'Home {eid}','abbreviation':'HME'},'score':'31'}]}
+    return {'id':str(eid),'name':f'Visitor {eid} at Home {eid}','date':stamp,'competitions':[c]}
+
+def tennis_event(eid,stamp=kickoff,tour="atp"):
+    event=game(eid,stamp)
+    event['name']=f'Tour Open {eid}'
+    event['groupings']=[{'grouping':{'slug':'womens-singles' if tour=='wta' else 'mens-singles','displayName':'Men singles'},'competitions':[{'id':str(eid),'date':stamp,'status':{'type':{'state':'in','shortDetail':'Set 2'}},'competitors':[{'id':str(eid*2),'athlete':{'id':str(eid*2),'displayName':f'Athlete {eid}'},'score':'1'}, {'id':str(eid*2+1),'athlete':{'id':str(eid*2+1),'displayName':f'Player {eid}'},'score':'0'}]}]}]
+    return event
+
+def check_league(league,width=390,primary_failure=False):
+ with sync_playwright() as pw:
+  browser=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+  ctx=browser.new_context(viewport={'width':width,'height':850},timezone_id='America/Denver')
+  p=ctx.new_page();errs=[];calls=[]
+  p.on('pageerror',lambda err:errs.append(str(err)))
+  def route(r):
+   u=r.request.url;calls.append(u)
+   selected=paths[league] in u
+   is_month=('dates='+day[:7].replace('-','')) in u and 'dates='+day.replace('-','') not in u
+   idbase=10000+list(paths).index(league)*100
+   make=(lambda eid,stamp=kickoff:tennis_event(eid,stamp,league)) if league in ('atp','wta') else game
+   # Monthly audits recover the missing matchup without inventing a game;
+   # a different-day event tests strict filtering of monthly results.
+   if selected and is_month: events=[make(idbase),make(idbase+1),make(idbase+2,other)]
+   elif selected: events=[] if primary_failure else [make(idbase)]
+   else: events=[]
+   r.fulfill(status=503 if selected and not is_month and primary_failure else 200,body=json.dumps({'events':events}),content_type='application/json',headers={'access-control-allow-origin':'*'})
+  ctx.route('https://site.api.espn.com/**',route)
+  ctx.route('https://sports.core.api.espn.com/**',lambda r:r.fulfill(status=200,body='{}',content_type='application/json'))
+  ctx.route('https://a.espncdn.com/**',lambda r:r.fulfill(status=404,body=''))
+  # Hide other leagues to make the selected league's audit deterministic.
+  state={'order':list(paths),'hidden':[x for x in [*paths,'cfb'] if x!=league],'collapsed':[],'orderRevision':30}
+  p.add_init_script('''(state)=>{}''') if False else None
+  p.goto('about:blank')
+  p.evaluate('''(data)=>{Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:(k)=>k==='scoreboard-layout-v1'?JSON.stringify(data):null,setItem:()=>{},removeItem:()=>{}}});}''',state)
+  p.set_content(HTML,wait_until='load')
+  try: p.wait_for_function('''(league)=>document.querySelectorAll(`[data-league="${league}"] .score-card`).length===2''',arg=league,timeout=5000)
+  except Exception as ex:
+   print('FAILED_LEAGUE',league,'CALLS',calls[-30:],'ERRORS',errs,'TEXT',p.locator('#scores-panel').inner_text()[:2800]);raise
+  txt=p.locator(f'[data-league="{league}"]').inner_text()
+  assert str(10000+list(paths).index(league)*100+1) in txt,(league,txt)
+  assert str(10000+list(paths).index(league)*100+2) not in txt,(league,'other date leaked',txt)
+  assert any('dates='+day[:7].replace('-','') in u for u in calls),('monthly audit not checked',league)
+  assert not errs,(league,errs)
+  browser.close()
+
+def check_ui(width):
+ with sync_playwright() as pw:
+  browser=pw.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
+  ctx=browser.new_context(viewport={'width':width,'height':850},timezone_id='America/Denver')
+  p=ctx.new_page();errs=[];p.on('pageerror',lambda e:errs.append(str(e)))
+  def route(r):
+   u=r.request.url
+   if 'basketball/wnba/scoreboard?' in u: events=[game(123456),game(123457)]
+   elif 'basketball/nba/scoreboard?' in u: events=[game(234567)]
+   else:events=[]
+   r.fulfill(status=200,body=json.dumps({'events':events}),content_type='application/json',headers={'access-control-allow-origin':'*'})
+  ctx.route('https://site.api.espn.com/**',route)
+  ctx.route('https://sports.core.api.espn.com/**',lambda r:r.fulfill(status=200,body='{}',content_type='application/json'))
+  ctx.route('https://a.espncdn.com/**',lambda r:r.fulfill(status=404,body=''))
+  p.set_content(HTML,wait_until='load')
+  p.locator('[data-sport="sport:basketball"]').first.click()
+  group=p.locator('[data-family="basketball"]')
+  assert group.locator('.sport-family-trigger .sport-symbol').inner_text()=='🏀'
+  assert group.locator('.family-all-choice').inner_text()=='ALL'
+  assert group.locator('.family-all-choice').bounding_box()['x']<group.locator('.sport-family-trigger').bounding_box()['x']
+  group.locator('[data-sport="nba"]').click()
+  assert group.locator('.sport-family-trigger .sport-symbol').count()==1
+  group.locator('.family-all-choice').click()
+  assert p.locator('[data-family="basketball"] .family-all-choice').get_attribute('aria-selected')=='true'
+  p.evaluate('document.querySelector("#scores-panel").style.minHeight="1800px";scrollTo(0,730)')
+  p.wait_for_function('document.getElementById("sticky-score-nav").classList.contains("has-sticky-count")')
+  if width<=760:
+   p.screenshot(path=f'/mnt/data/sb35/mobile_nav_{width}.png')
+   geo=p.evaluate('''() => {const rect=(q)=>{const r=document.querySelector(q).getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom}};return {nav:rect('#sticky-score-nav'),tabs:rect('#sport-tabs'),count:rect('#live-filter-sticky'),date:rect('.sticky-nav-actions'),over:document.documentElement.scrollWidth-innerWidth}}''')
+   assert geo['tabs']['bottom']<=geo['count']['y']+3,geo
+   assert geo['count']['right']<=geo['date']['x']+2 or width<=355,geo
+   assert geo['over']<=3,geo
+  assert not errs,errs
+  browser.close()
+
+if __name__=='__main__':
+ for league in paths:check_league(league)
+ check_league('nhl',primary_failure=True)
+ for width in [390,320,1280]:check_ui(width)
+ print('PASS 0_35 non-CFB coverage and mobile navigation')

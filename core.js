@@ -332,6 +332,9 @@ const SORT_MODES={
   let feeds=new Map();
   const cache=new Map();
   let queue=[],activeRequests=0;
+  // Score feeds are refreshed independently; a slow league must not block
+  // another league, a new tab, or a user-requested refresh.
+  const refreshJobs=new Map(),rerunLeagues=new Set();
   // Limit simultaneous connections. Queued jobs are cancelled when the date changes.
   function limited(task,signal) {
     return new Promise((resolve,reject)=>{queue.push({task,signal,resolve,reject});drain();});
@@ -360,14 +363,17 @@ const SORT_MODES={
       }finally{clearTimeout(timer);signal.removeEventListener('abort',abort);}
     },signal);
   }
-  async function request(path,date,signal,group=null) {
-    const groupParam=path==='football/college-football'?`&groups=${group??80}`:'';
+  async function request(path,date,signal,group=null,force=false) {
+    const groupParam=path==='football/college-football'&&group!=='ranked'?`&groups=${group??80}`:'';
     const url=`https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?dates=${date.replaceAll('-','')}&limit=1000${groupParam}`;
     const saved=cache.get(url);
     const today=dateInZone(new Date(),zone);
     const offset=Math.abs((Date.parse(date+'T00:00:00Z')-Date.parse(today+'T00:00:00Z'))/86400000);
-    const ttl=offset===0?20000:offset===1?120000:600000;
-    if(saved&&Date.now()-saved.receivedAt<ttl)return saved;
+    // Adjacent-date feeds also contain games crossing local midnight. Never
+    // give a live game the two-minute neighbor-cache lifetime.
+    const cachedLive=!!saved?.data?.events?.some(e=>e.status?.type?.state==='in'||e.competitions?.some(c=>c.status?.type?.state==='in'));
+    const ttl=cachedLive?20000:offset===0?20000:offset===1?60000:600000;
+    if(!force&&saved&&Date.now()-saved.receivedAt<ttl)return saved;
     const data=await fetchESPNJSON(url,signal);
     if(!Array.isArray(data?.events))throw new Error('Unexpected scoreboard format');
     const value={data,receivedAt:Date.now()};
@@ -401,83 +407,296 @@ const SORT_MODES={
     fbsRegistry={ids,season,receivedAt:Date.now()};
     return ids;
   }
-  function mergedCfbScoreboard(fbsFeeds,fcsFeeds,ids){
-    const events=new Map();
-    for(const result of fbsFeeds)for(const e of result.data.events??[])events.set(String(e.id),e);
-    for(const result of fcsFeeds){
-      for(const e of result.data.events??[]){
-        if(events.has(String(e.id)))continue;
-        const competitors=(e.competitions??[]).flatMap(c=>c.competitors??[]);
-        if(competitors.some(c=>ids.has(String(c.team?.id??c.id??''))))events.set(String(e.id),e);
+  // The FBS roll-up does not always include every announced FBS matchup.
+  // Supplement it with ESPN's ranked slate and conference scoreboards.
+  // These are independent reads: a missing standings/FCS endpoint must NEVER
+  // hold up the main college football scores. We cache successful alternate
+  // snapshots so a previously discovered game remains visible during retries.
+  const CFB_RAPID_GROUPS=['ranked',8]; // Top-25 slate and SEC; live checks.
+  const CFB_AUDIT_GROUPS=[1,4,5,9,12,15,17,18,37,151]; // Other FBS conferences.
+  const CFB_AUDIT_INTERVAL=180000;
+  let cfbAuditCursor=0;
+  const cfbPrimary=new Map(),cfbSnapshots=new Map(),cfbInFlight=new Set(),cfbChecked=new Map(),cfbActiveGroups=new Set();
+  const cfbStatusRank={pre:0,in:1,post:2};
+  function mergeCfbCandidates(items){
+    const chosen=new Map();
+    for(const candidate of items){
+      const k=candidate.game.id,current=chosen.get(k);
+      const a=cfbStatusRank[candidate.game.state]??-1,b=cfbStatusRank[current?.game.state]??-1;
+      if(!current||a>b||(a===b&&(candidate.at>current.at||candidate.at===current.at&&candidate.center&&!current.center)))chosen.set(k,candidate);
+    }
+    return [...chosen.values()].map(c=>c.game);
+  }
+  function cfbSupplementStore(snapshotDay){
+    if(!cfbSnapshots.has(snapshotDay))cfbSnapshots.set(snapshotDay,new Map());
+    return cfbSnapshots.get(snapshotDay);
+  }
+  function publishCfb(snapshotDay,token){
+    if(token!==revision||snapshotDay!==day)return;
+    const base=cfbPrimary.get(snapshotDay),old=feeds.get('cfb');
+    if(!base||!old)return;
+    const extras=[];
+    for(const source of cfbSupplementStore(snapshotDay).values()) {
+      try {extras.push(...normalize(source.data,'cfb',snapshotDay,zone).map(game=>({game,at:source.receivedAt,center:false})));}
+      catch(error){console.warn('Ignoring invalid CFB supplemental response',error);}
+    }
+    const games=mergeCfbCandidates([...base.candidates,...extras]);
+    const freshestSupplement=Math.max(0,...[...cfbSupplementStore(snapshotDay).values()].map(x=>x.receivedAt));
+    const recovered=base.receivedAt===0&&extras.length>0;
+    // When a verified backup feed succeeds, it is CURRENT data even if the
+    // roll-up failed. Do not hide a live matchup behind a stale-feed filter.
+    feeds.set('cfb',{...old,games,
+      receivedAt:Math.max(base.receivedAt,freshestSupplement,old.receivedAt||0),
+      error:recovered?'':old.error,
+      coverageWarning:recovered?'Primary FBS feed unavailable; showing games recovered from ranked and conference feeds.':old.coverageWarning,
+      loading:false});
+    render();
+    const opened=findGame(expandedGame);
+    if(opened?.league==='cfb')loadExpanded(opened);
+  }
+  function rememberCfbSource(snapshotDay,sourceKey,payload,receivedAt,token){
+    if(token!==revision||snapshotDay!==day)return;
+    cfbSupplementStore(snapshotDay).set(sourceKey,{data:payload,receivedAt});
+    // Promote a conference with a live matchup missing from the FBS roll-up
+    // to live-rate polling; do not leave a recovered game frozen for minutes.
+    if(sourceKey.startsWith('group:')){
+      const group=Number(sourceKey.slice(6));
+      if(Number.isInteger(group)&&!CFB_RAPID_GROUPS.includes(group)){
+        const primaryIds=new Set((cfbPrimary.get(snapshotDay)?.candidates??[]).map(c=>c.game.id));
+        const uncoveredLive=normalize(payload,'cfb',snapshotDay,zone).some(g=>g.state==='in'&&!primaryIds.has(g.id));
+        if(uncoveredLive)cfbActiveGroups.add(group);
+        else cfbActiveGroups.delete(group);
       }
     }
-    return {events:[...events.values()]};
+    publishCfb(snapshotDay,token);
+  }
+  function checkCfbGroup(snapshotDay,token,signal,group,force=false){
+    const key=token+':'+snapshotDay+':'+group;
+    const freshnessKey=snapshotDay+':'+group;
+    const last=cfbChecked.get(freshnessKey)??0;
+    const interval=CFB_RAPID_GROUPS.includes(group)?REFRESH_MS:CFB_AUDIT_INTERVAL;
+    if(cfbInFlight.has(key)||(!force&&Date.now()-last<interval))return;
+    cfbChecked.set(freshnessKey,Date.now());
+    cfbInFlight.add(key);
+    // Use only this scoreboard date. The main FBS roll-up already reads
+    // adjacent days for late-night games and timezone differences.
+    request('football/college-football',snapshotDay,signal,group,force)
+      .then(result=>rememberCfbSource(snapshotDay,'group:'+group,result.data,result.receivedAt,token))
+      .catch(error=>{if(!signal.aborted)console.warn('CFB conference/ranked coverage unavailable:',group,error);})
+      .finally(()=>cfbInFlight.delete(key));
+  }
+  function checkCfbFcs(snapshotDay,token,signal,force){
+    const key=token+':'+snapshotDay+':fcs',freshnessKey=snapshotDay+':fcs',last=cfbChecked.get(freshnessKey)??0;
+    if(cfbInFlight.has(key)||(!force&&Date.now()-last<CFB_AUDIT_INTERVAL))return;
+    cfbInFlight.add(key);cfbChecked.set(freshnessKey,Date.now());
+    const season=Number(snapshotDay.slice(0,4))-(Number(snapshotDay.slice(5,7))<=2?1:0);
+    // Run only AFTER the primary response has already been published.
+    (async()=>{
+      const ids=await fbsTeamIds(signal,season);
+      const dates=[-1,0,1].map(n=>dayShift(snapshotDay,n));
+      const settlements=await Promise.allSettled(dates.map(d=>request('football/college-football',d,signal,81,force)));
+      const results=settlements.filter(r=>r.status==='fulfilled').map(r=>r.value);
+      if(!results.length)throw Error('No FCS supplemental scoreboards available');
+      const events=new Map();
+      for(const r of results)for(const e of r.data.events??[]){
+        const teams=(e.competitions??[]).flatMap(c=>c.competitors??[]);
+        if(teams.some(c=>ids.has(String(c.team?.id??c.id??''))))events.set(String(e.id),e);
+      }
+      rememberCfbSource(snapshotDay,'fbs-fcs',{events:[...events.values()]},Math.max(...results.map(r=>r.receivedAt)),token);
+    })().catch(error=>{
+      if(signal.aborted||token!==revision||snapshotDay!==day)return;
+      console.warn('FBS-FCS supplement unavailable',error);
+      const old=feeds.get('cfb');if(old){feeds.set('cfb',{...old,coverageWarning:'FBS–FCS coverage may be incomplete (supplemental feed unavailable).'});render();}
+    }).finally(()=>cfbInFlight.delete(key));
+  }
+  function checkCfbCoverage(snapshotDay,token,signal,force){
+    // Ranked and SEC results publish as soon as each is received.
+    for(const group of [...CFB_RAPID_GROUPS,...cfbActiveGroups])checkCfbGroup(snapshotDay,token,signal,group,force);
+    // Periodic league-wide audit; conference requests share the normal
+    // bounded network queue, so main live score refreshes remain independent.
+    // Rotate a small audit batch each poll instead of saturating all six
+    // network connections with secondary conference requests at once.
+    for(let i=0;i<3;i++){
+      const group=CFB_AUDIT_GROUPS[(cfbAuditCursor+i)%CFB_AUDIT_GROUPS.length];
+      checkCfbGroup(snapshotDay,token,signal,group,force);
+    }
+    cfbAuditCursor=(cfbAuditCursor+3)%CFB_AUDIT_GROUPS.length;
+    checkCfbFcs(snapshotDay,token,signal,force);
+  }
+  // Secondary broad-month audit for the non-CFB leagues. Daily scoreboard
+  // endpoints can omit an event despite a larger monthly schedule listing it.
+  // This source is additive: it never deletes or overwrites a current daily
+  // reading of the same status. Audits are bounded to two concurrent reads,
+  // do not delay the primary score fetch, and never infer missing events.
+  const coverageSnapshots=new Map(),coverageAttempts=new Map(),coverageJobs=new Set();
+  let coverageActive=0;
+  const COVERAGE_INTERVAL_MS=4*60000, COVERAGE_MAX_CONCURRENT=2;
+  const coverageGrade={pre:0,in:1,post:2};
+  function applyCoverage(def,snapshotDay){
+    const feed=feeds.get(def.key);if(!feed||!feed.receivedAt)return;
+    const primary=feed.baseGames??feed.games;
+    const supplement=coverageSnapshots.get(def.id);
+    const matches=supplement?.day===snapshotDay?supplement.games:[];
+    const merged=new Map(primary.map(g=>[g.id,g]));let recovered=0;
+    for(const candidate of matches){
+      const current=merged.get(candidate.id);
+      if(!current){merged.set(candidate.id,candidate);recovered++;}
+      else if((coverageGrade[candidate.state]??-1)>(coverageGrade[current.state]??-1))merged.set(candidate.id,candidate);
+    }
+    const notice=recovered?`${recovered} ${recovered===1?'game':'games'} recovered from a broader schedule listing.`:'';
+    feeds.set(def.key,{...feed,games:[...merged.values()],coverageWarning:[feed.baseWarning,notice].filter(Boolean).join(' ')});
+  }
+  function scheduleCoverageAudit(snapshotDay,token,signal){
+    if(token!==revision||signal.aborted||!navigator.onLine)return;
+    const now=Date.now();
+    for(const def of defs){
+      if(coverageActive>=COVERAGE_MAX_CONCURRENT)break;
+      if(def.id==='cfb'||!neededLeagueIds().has(def.id))continue;
+      const feed=feeds.get(def.key);
+      if(!feed||(!feed.receivedAt&&!feed.error)||!Array.isArray(feed.games))continue;
+      const key=token+':'+def.id,previous=coverageAttempts.get(def.id)??0;
+      if(coverageJobs.has(key)||now-previous<COVERAGE_INTERVAL_MS)continue;
+      coverageAttempts.set(def.id,now);coverageJobs.add(key);coverageActive++;
+      const month=snapshotDay.slice(0,7).replace('-','');
+      const url=`https://site.api.espn.com/apis/site/v2/sports/${def.path}/scoreboard?dates=${month}&limit=1000`;
+      fetchESPNJSON(url,signal).then(data=>{
+        if(!Array.isArray(data?.events))throw Error('Unexpected monthly scoreboard format');
+        if(token!==revision||snapshotDay!==day)return;
+        const games=normalize(data,def.id,snapshotDay,zone,def.tour);
+        coverageSnapshots.set(def.id,{day:snapshotDay,games,receivedAt:Date.now()});
+        // A failed primary daily feed is not a reason to suppress verified
+        // month-feed matchups. Keep the warning and ordinary retry schedule.
+        const primary=feeds.get(def.key);
+        if(games.length&&primary?.error&&!primary.receivedAt){
+          feeds.set(def.key,{...primary,baseGames:[],games:[],receivedAt:Date.now(),error:'',baseWarning:'Daily scoreboard unavailable; showing a broader schedule as backup.',loading:false});
+        }
+        applyCoverage(def,snapshotDay);render();
+      }).catch(error=>{
+        // An unsupported month format or unavailable audit endpoint must not
+        // take down a working daily scoreboard. Keep existing known games.
+        if(!signal.aborted)console.warn('Supplemental schedule audit unavailable:',def.id,error);
+      }).finally(()=>{coverageJobs.delete(key);coverageActive=Math.max(0,coverageActive-1);});
+    }
   }
   function emptyFeed() {return {games:[],receivedAt:0,error:'',failures:0,nextTry:0,loading:false};}
   function isStale(f) {return !!f.error||!!f.receivedAt&&Date.now()-f.receivedAt>STALE_MS;}
   function busyState(value) {
-    busy=value;$('refresh').disabled=value;$('refresh-icon').classList.toggle('spin',value);
+    busy=value;$('refresh').disabled=false;$('refresh-icon').classList.toggle('spin',value);
     $('scores-panel').setAttribute('aria-busy',String(value));updateStatus();
   }
-  async function refresh(force=false) {
-    if(busy||document.hidden)return;
-    if(!navigator.onLine){updateStatus();return;}
+  // One canonical scoreboard state per league. Only one network job is allowed
+  // per league/date, but jobs for different leagues can complete independently.
+  // A click on Refresh during an in-flight request schedules one real follow-up.
+  function launchFeedRefresh(def,force=false){
     const token=revision,signal=controller.signal,snapshotDay=day;
+    if(refreshJobs.has(def.key)){
+      if(force)rerunLeagues.add(def.key);
+      return;
+    }
+    if(!force&&Date.now()<(feeds.get(def.key)?.nextTry??0))return;
+    const old=feeds.get(def.key)||emptyFeed();
+    feeds.set(def.key,{...old,loading:true});
+    const job=refreshLeague(def,old,signal,snapshotDay,token,force).finally(()=>{
+      if(token!==revision)return;
+      refreshJobs.delete(def.key);
+      busyState(refreshJobs.size>0);
+      // Follow up ONLY this league. Re-running all leagues here would make
+      // overlapping manual refreshes cascade indefinitely.
+      const mustRerun=rerunLeagues.delete(def.key);
+      if(mustRerun&&neededLeagueIds().has(def.id))queueMicrotask(()=>{
+        if(token===revision){launchFeedRefresh(def,true);busyState(refreshJobs.size>0);}
+      });
+    });
+    refreshJobs.set(def.key,job);
+  }
+  function refresh(force=false) {
+    if(document.hidden)return;
+    if(!navigator.onLine){updateStatus();return;}
     const neededIds=neededLeagueIds();
-    const needed=defs.filter(d=>neededIds.has(d.id)).filter(d=>force||Date.now()>=(feeds.get(d.key)?.nextTry??0));
-    if(!needed.length){updateStatus();return;}
-    busyState(true);
-    for(const def of needed){const f=feeds.get(def.key)||emptyFeed();f.loading=true;feeds.set(def.key,f);}
-    render();
-    await Promise.all(needed.map(async def=>{
-      const old=feeds.get(def.key)||emptyFeed();
-      try {
-        // Adjacent calendar days catch games that cross a local midnight.
-        const dates=[-1,0,1].map(n=>dayShift(snapshotDay,n));
-        const results=await Promise.all(dates.map(date=>request(def.path,date,signal)));
-        let payloads=results.map(r=>r.data),coverageWarning='';
-        // Best-effort CFB supplement: failure never removes the main FBS feed.
-        if(def.id==='cfb'){
-          try{
-            const season=Number(snapshotDay.slice(0,4))-(Number(snapshotDay.slice(5,7))<=2?1:0);
-            const [ids,...fcs]=await Promise.all([fbsTeamIds(signal,season),...dates.map(date=>request(def.path,date,signal,81))]);
-            payloads=[mergedCfbScoreboard(results,fcs,ids)];
-          }catch(error){
-            if(signal.aborted)throw error;
-            coverageWarning='FBS–FCS games may be missing (supplemental feed unavailable).';
-            console.warn('CFB supplement unavailable.',error);
-          }
-        }
-        // A game can appear in more than one adjacent-date response. Prefer
-        // the most recently received copy; otherwise a stale cached neighbor
-        // can overwrite a newly fetched score during live monitoring.
-        const games=payloads.map((data,i)=>({data,at:results[i]?.receivedAt??Date.now()}))
-          .sort((a,b)=>a.at-b.at)
-          .flatMap(({data})=>normalize(data,def.id,snapshotDay,zone,def.tour));
+    const needed=defs.filter(d=>neededIds.has(d.id))
+      // Active games go first when the network queue is congested.
+      .sort((a,b)=>Number(!(feeds.get(a.key)?.games??[]).some(g=>g.state==='in'))-Number(!(feeds.get(b.key)?.games??[]).some(g=>g.state==='in')));
+    for(const def of needed)launchFeedRefresh(def,force);
+    scheduleCoverageAudit(day,revision,controller.signal);
+    busyState(refreshJobs.size>0);
+  }
+  async function refreshLeague(def,old,signal,snapshotDay,token,force) {
+    try {
+      // Adjacent dates catch games that cross a local midnight. Ordinarily
+      // cached neighbor dates are reused; explicit Refresh bypasses the cache.
+      const dates=[-1,0,1].map(n=>dayShift(snapshotDay,n));
+      // A failed adjacent-day request must not erase today's games.
+      // Publish every successful date and mark gaps rather than failing the
+      // entire league on one rejected promise.
+      const settlements=await Promise.allSettled(dates.map(date=>request(def.path,date,signal,null,force)));
+      const results=settlements.flatMap((r,i)=>r.status==='fulfilled'?[{...r.value,dayIndex:i}]:[]);
+      if(!results.length)throw Error('All scoreboard date requests failed');
+      const partial=results.length<dates.length;
+      if(def.id==='cfb'){
+        const candidates=results.flatMap(result=>normalize(result.data,'cfb',snapshotDay,zone)
+          .map(game=>({game,at:result.receivedAt,center:result.dayIndex===1})));
         if(token!==revision)return;
-        feeds.set(def.key,{games:[...new Map(games.map(g=>[g.id,g])).values()],receivedAt:Math.min(...results.map(r=>r.receivedAt)),error:'',coverageWarning,failures:0,nextTry:0,loading:false});
-      } catch(error) {
-        if(token!==revision||signal.aborted)return;
-        const failures=old.failures+1;
-        feeds.set(def.key,{...old,loading:false,error:'Could not reach the score feed.',failures,nextTry:Date.now()+Math.min(300000,REFRESH_MS*2**(failures-1))});
+        cfbPrimary.set(snapshotDay,{candidates,receivedAt:Math.min(...results.map(r=>r.receivedAt))});
+        // Do not defer the primary FBS feed until the ranked, conference,
+        // standings, or FCS endpoints respond.
+        feeds.set(def.key,{...old,games:mergeCfbCandidates(candidates),receivedAt:Math.min(...results.map(r=>r.receivedAt)),error:'',coverageWarning:partial?'One CFB date feed failed; alternate sources are being checked.':old.coverageWarning??'',failures:0,nextTry:0,loading:false});
+        publishCfb(snapshotDay,token);
+        checkCfbCoverage(snapshotDay,token,signal,force);
+      }else{
+        // Prefer a live/final status over a stale scheduled duplicate from
+        // an adjacent-date response, then prefer the newest snapshot.
+        const candidates=results.flatMap(r=>normalize(r.data,def.id,snapshotDay,zone,def.tour)
+          .map(game=>({game,at:r.receivedAt,center:r.dayIndex===1})));
+        const quality={pre:0,in:1,post:2},chosen=new Map();
+        for(const candidate of candidates){
+          const current=chosen.get(candidate.game.id);
+          const grade=x=>quality[x.game.state]??-1;
+          if(!current||grade(candidate)>grade(current)||
+            (grade(candidate)===grade(current)&&(candidate.at>current.at||candidate.at===current.at&&candidate.center&&!current.center)))
+            chosen.set(candidate.game.id,candidate);
+        }
+        if(token!==revision)return;
+        const baseGames=[...chosen.values()].map(x=>x.game);
+        const baseWarning=partial?'One adjacent-date feed failed; this schedule may be incomplete.':'';
+        feeds.set(def.key,{games:baseGames,baseGames,baseWarning,receivedAt:Math.min(...results.map(r=>r.receivedAt)),error:'',coverageWarning:baseWarning,failures:0,nextTry:0,loading:false});
+        applyCoverage(def,snapshotDay);
       }
-      if(token===revision)render();
-    }));
+    }catch(error){
+      if(token!==revision||signal.aborted)return;
+      // Even a completely unavailable FBS roll-up must not suppress games
+      // that ESPN's ranked or conference scoreboard can still provide.
+      if(def.id==='cfb'){
+        cfbPrimary.set(snapshotDay,{candidates:[],receivedAt:0});
+        checkCfbCoverage(snapshotDay,token,signal,force);
+      }
+      const failures=old.failures+1;
+      const fallback=def.id==='cfb'?null:coverageSnapshots.get(def.id);
+      if(fallback?.day===snapshotDay&&fallback.games.length){
+        // Month feed supplies known events when daily score requests all fail.
+        // This is incomplete coverage, never a verified empty schedule.
+        const baseGames=old.baseGames??[];
+        feeds.set(def.key,{...old,baseGames,games:baseGames,receivedAt:fallback.receivedAt,error:'',baseWarning:'Daily scoreboard unavailable; using broader schedule as backup.',failures,nextTry:Date.now()+Math.min(300000,REFRESH_MS*2**(failures-1)),loading:false});
+        applyCoverage(def,snapshotDay);
+      }else feeds.set(def.key,{...old,loading:false,error:'Could not reach the score feed.',failures,nextTry:Date.now()+Math.min(300000,REFRESH_MS*2**(failures-1))});
+    }
     if(token!==revision)return;
-    lastCheck=Date.now();busyState(false);render();
-    const open=findGame(expandedGame);if(open)loadExpanded(open);
-    const failed=needed.filter(d=>feeds.get(d.key)?.error).length;
-    $('announcer').textContent=failed?'Refresh completed. Some scores are unavailable.':'Scores checked at '+time(lastCheck)+'.';
-    // A team may have been favorited during this refresh. Pick up its feed
-    // immediately instead of waiting for the next 30-second timer cycle.
-    if(defs.some(d=>neededLeagueIds().has(d.id)&&!feeds.has(d.key)))queueMicrotask(()=>{if(token===revision&&!busy)refresh();});
+    lastCheck=Date.now();
+    render();
+    // As soon as a league has reported once, its independent coverage audit
+    // can start without blocking the scoreboard or a different league.
+    scheduleCoverageAudit(snapshotDay,token,signal);
+    const open=findGame(expandedGame);if(open&&open.league===def.id)loadExpanded(open);
+    // A sport/favorite may have been selected while this feed was in flight.
+    // Launch newly needed leagues without waiting for the next timer tick.
+    if(defs.some(d=>neededLeagueIds().has(d.id)&&!feeds.has(d.key)))
+      queueMicrotask(()=>{if(token===revision)refresh();});
   }
   function changeDay(next) {
     if(!validDay(next)){$('date').value=day;return;}
     followToday=next===dateInZone(new Date(),zone);
     if(next===day){refresh(true);return;}
     if(monitorDialog.open)closeMonitor();
-    controller.abort();revision++;controller=new AbortController();
+    controller.abort();revision++;controller=new AbortController();refreshJobs.clear();rerunLeagues.clear();coverageSnapshots.clear();coverageAttempts.clear();cfbPrimary.clear();cfbSnapshots.clear();cfbChecked.clear();cfbActiveGroups.clear();cfbAuditCursor=0;
     expandedGame='';expandedState.clear();summaryCache.clear();day=next;feeds=new Map();lastCheck=0;busyState(false);updateDate();render();refresh();
   }
   function updateDate() {
