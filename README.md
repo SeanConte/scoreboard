@@ -1,8 +1,33 @@
-# Scoreboard 0.35
+## Scoreboard 0_39 — clean navigation release
+
+Built on 0_38 using the revised two-row sticky header from the 0_39 experiment, **without** experimental basketball GIFs. Sport tabs scroll horizontally only; Settings is on the top-right, and Pins/Favorites and date controls share the second row (live count appears there when scrolled). This is a standalone `index.html` and GitHub Pages package. All existing gameplay, favorites, layout settings and league data handling remain unchanged.
+
+# Scoreboard 0.38
 
 A browser-based, static sports scoreboard. `index.html` is the deployable file for GitHub Pages and can be opened directly. No account or application server is required. Live scores and expanded statistics still require access to ESPN's public feeds (including their CORS availability).
 
 The release history and earlier rollback reference notes are recorded in [`CHANGELOG.md`](CHANGELOG.md).
+
+## 0.38 — Sticky saved filters and favorites management
+
+- Replaced the board pictogram with a clearer pair of pushpins; the separate three-star favorite filter remains.
+- Once the main pin and favorite filters scroll past the sticky navigation bar, a compact pair of matching controls appears beside the live-game counter. Counts, selected state, and filter behavior are synchronized across the original and sticky controls. On small screens they occupy a dedicated row rather than covering the sport navigation.
+- **Customize** retains the original **Leagues** tab for expanded/collapsed/hidden visibility and drag reordering. A new **Favorite teams** tab lists saved teams by league with names, logos when available, and individual unfavorite controls. Favorites saved by prior app versions can resolve missing names through ESPN team identity data without changing stable saved IDs.
+- All pin/favorite preferences remain browser-local. Tests: desktop and 390/320px interaction and sticky-header fixtures, older saved-favorite migration, plus targeted previous live-filter and 0_37 filter/league-navigation regressions. The older layout suite was not completed in this run.
+
+## 0.37 — Filters, league display, and full league lists
+
+- The pin-board and three-star icons in the scoreboard controls are filters, not duplicate sections. Both active means pinned **or** favorite; Live-only can narrow either. They save in browser preferences. Day pins and favorite team IDs retain their existing storage keys.
+- The Settings dialog now offers Expanded, Collapsed, and Hidden for every league, with the same drag/reorder, arrows, and Reset controls. Prior visible/hidden and collapsed preferences continue to work.
+- The grouped All sports view caps each league at 12 matches/games and offers **View all** for longer leagues. Clicking the league name also opens its full list; the separate chevron collapses it in-place. Ungrouped mode still shows all matches together without a cap.
+- The version number is unobtrusively located at the foot of the page.
+- Updated tests: `tests/test_revision_037.py`, tested at 1280px, 390px, and 320px. Other retained regression tests remain in the ZIP; live-refresh and chart-selection checks passed. ESPN availability is not certified by fixtures.
+
+## 0.36 — Touchable chart inspection and live situation
+
+- In full-screen Overview, hover is temporary; a tap/click selects a chart moment. Tap/click that same moment, press the small ×, press Escape, or click outside to dismiss. A different moment updates the selection. Pinned moments survive live-score re-renders but clear when leaving the game monitor.
+- On phones, the chart detail readout appears beneath the graph instead of overlapping the scoring lines.
+- A compact live-only situation strip uses verified ESPN situation fields: NFL/CFB possession, down/distance, field position and timeouts when provided; MLB inning, batting team, outs, count and occupied bases; hockey period/clock, shots and power plays; basketball period/clock, fouls/timeouts where provided; MLS/NWSL clock, shots on target and red cards where available; ATP/WTA server and points where available. Nothing is inferred when the feed is silent.
 
 ## 0.35 — Coverage audits and mobile navigation
 

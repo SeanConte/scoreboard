@@ -342,7 +342,19 @@
     const rel=(px-left)/pw;
     tooltip.style.left=`${Math.max(14,Math.min(80,rel*100))}%`;
     tooltip.classList.toggle('chart-hover-right',rel>.58);
+    tooltip.classList.toggle('is-pinned',pin);
     if(pin){svg.dataset.chartPinned='true';svg.dataset.chartPinnedX=String(effective);preferences(g.id).chartPinX=effective;}
+    // Pointer hover is still transient; locked points can be dismissed directly.
+    tooltip.insertAdjacentHTML('beforeend',pin?'<button type="button" class="chart-hover-clear" data-chart-clear aria-label="Clear selected chart point">×</button>':'');
+    return effective;
+  }
+  function clearChartCursor(svg){
+    if(!svg)return;
+    svg.dataset.chartPinned='false';delete svg.dataset.chartPinnedX;
+    delete preferences(svg.dataset.chartGame).chartPinX;
+    for(const shape of svg.querySelectorAll('.chart-cursor-line,.chart-cursor-away,.chart-cursor-home'))shape.setAttribute('visibility','hidden');
+    const tooltip=svg.closest('.monitor-chart-wrap')?.querySelector('[data-chart-tooltip]');
+    if(tooltip){tooltip.hidden=true;tooltip.classList.remove('is-pinned');tooltip.innerHTML='';}
   }
   function chartPointerPosition(event,svg){
     const p=svg.createSVGPoint();p.x=event.clientX;p.y=event.clientY;
@@ -350,10 +362,17 @@
   }
   function moveChartCursor(event){
     const svg=event.target.closest?.('.monitor-interactive-chart');if(!svg)return;
-    if(svg.dataset.chartPinned==='true'&&event.type==='pointermove')return;
+    if(event.type==='pointermove'&&(event.pointerType==='touch'||svg.dataset.chartPinned==='true'))return;
+    if(event.type==='pointerdown'&&event.button!==0)return;
     const px=chartPointerPosition(event,svg);if(px===null)return;
     const x=(px-Number(svg.dataset.chartLeft))/Number(svg.dataset.chartWidth)*Number(svg.dataset.chartHi);
-    chartCursorAt(svg,x,event.type==='pointerdown');
+    if(event.type==='pointerdown'){
+      // Repeated tap/click at the same moment deselects; another moment moves it.
+      const prior=svg.dataset.chartPinned==='true'?Number(svg.dataset.chartPinnedX):null;
+      const effective=chartCursorAt(svg,x,true);
+      const threshold=Number(svg.dataset.chartHi)*14/Number(svg.dataset.chartWidth);
+      if(prior!==null&&Math.abs(prior-effective)<=threshold)clearChartCursor(svg);
+    }else chartCursorAt(svg,x,false);
   }
   function signedArea(g,series){
     if(!series||series.quality!=='plays'||!['clock','minutes'].includes(series.basis))return null;
@@ -648,6 +667,76 @@
     if(g.tennis)return `<span class="monitor-set-scores">${(side.sets??[]).map((v,i)=>`<span title="Set ${i+1}">${esc(v.value)}</span>`).join(' ')||'—'}</span>`;
     return `<strong class="monitor-score" aria-label="${esc(side.name)} score">${esc(side.score??'—')}</strong>`;
   }
+  // Live-state details are taken only from fields actually present in ESPN's
+  // scoreboard or summary. Avoid guessing field direction or possessions.
+  function monitorLiveContext(g,data){
+    if(g.state!=='in')return '';
+    const competition=data?.header?.competitions?.[0]??{};
+    const sit={...(g.situation??{}),...(competition.situation??{})};
+    const chips=[];
+    const add=(label,value)=>{
+      const v=String(value??'').trim();if(v&&v!=='undefined'&&v!=='null'&&v!=='—')chips.push(`<span class="monitor-live-chip"><small>${esc(label)}</small><strong>${esc(shortText(v,85))}</strong></span>`);
+    };
+    const teamById=raw=>{
+      const id=String(raw?.team?.id??raw?.id??raw??'').trim();
+      const t=g.sides.find(side=>id&&[side.id,side.short].some(x=>String(x).toLowerCase()===id.toLowerCase()));
+      return t?.short??(typeof raw==='object'?String(raw?.team?.abbreviation??raw?.abbreviation??''):'');
+    };
+    const available=(obj,key)=>obj&&obj[key]!==null&&obj[key]!==undefined;
+    if(['nfl','cfb'].includes(g.league)){
+      const owner=teamById(sit.possession??sit.possessionTeam??sit.offense);
+      add('Possession',owner);
+      const dd=String(sit.downDistanceText??'').trim();
+      const down=sit.down,dist=sit.distance;
+      add('Down & distance',dd||((down!=null&&dist!=null)?`${down} & ${dist}`:''));
+      const position=String(sit.yardLineText??sit.fieldPosition??sit.possessionText??'').trim();
+      const fromDown=dd.match(/\bat\s+([A-Z]{2,5}\s*\d{1,2}|midfield)\b/i)?.[1]??'';
+      if(position||fromDown)add('Field position',position||fromDown);
+      else if(sit.yardLine!==null&&sit.yardLine!==undefined&&Number.isFinite(Number(sit.yardLine)))
+        add('Yard-line marker',sit.yardLine); // Marker only; don't infer a field side.
+      const timeouts=[['Away',sit.awayTimeouts],['Home',sit.homeTimeouts]].filter(([,v])=>Number.isInteger(Number(v))&&v!==null&&v!==undefined);
+      if(timeouts.length===2)add('Timeouts',`${g.sides[0].short} ${timeouts[0][1]} · ${g.sides[1].short} ${timeouts[1][1]}`);
+    }else if(g.league==='mlb'){
+      const inning=sit.inning??competition.status?.period;
+      const half=String(sit.inningHalf??sit.halfInning??'').toLowerCase();
+      const batting=half.includes('top')?g.sides[0]:half.includes('bottom')?g.sides[1]:null;
+      add('At bat',batting?.short);
+      add('Inning',g.status);
+      if(available(sit,'outs'))add('Outs',sit.outs);
+      if(available(sit,'balls')&&available(sit,'strikes'))add('Count',`${sit.balls}–${sit.strikes}`);
+      const baseNames=[['1B',sit.onFirst??sit.first],['2B',sit.onSecond??sit.second],['3B',sit.onThird??sit.third]]
+        .filter(([,v])=>v===true||v?.athlete||v?.player||v?.id).map(([name])=>name);
+      if(baseNames.length)add('Runners',baseNames.join(', '));
+    }else if(g.league==='atp'||g.league==='wta'){
+      add('Server',g.sides.find(x=>x.serving)?.short);
+      if(g.sides.some(x=>x.point!==undefined))add('Current points',g.sides.map(x=>`${x.short} ${x.point??'—'}`).join(' · '));
+      add('Match',g.status);
+    }else{
+      // Clock/status is always supplied on live scoreboards, when available.
+      add(g.league==='mls'||g.league==='nwsl'?'Match':'Period / clock',g.status);
+      const box=parseBox(g,data);
+      const keyNames={nba:['fouls','personalFouls'],wnba:['fouls','personalFouls'],nhl:['shotsOnGoal','shots'],mls:['shotsOnTarget','shotsOnGoal'],nwsl:['shotsOnTarget','shotsOnGoal']}[g.league]??[];
+      const key=[...box.teamKeys].find(k=>keyNames.some(candidate=>k.toLowerCase().replace(/[^a-z]/g,'')===candidate.toLowerCase()));
+      if(key){const a=box.teamStats[0].get(key)?.display,b=box.teamStats[1].get(key)?.display;
+        if(a!=null&&b!=null)add(box.teamStats[0].get(key)?.name??'Live stat',`${g.sides[0].short} ${a} · ${g.sides[1].short} ${b}`);
+      }
+      if(g.league==='nhl'){
+        const power=sit.powerPlayTeam??sit.powerPlay;
+        if(power)add('Power play',power===true?'Active':teamById(power)||String(power));
+      }
+      if(['nba','wnba'].includes(g.league)){
+        const timeouts=[sit.awayTimeouts,sit.homeTimeouts];
+        if(timeouts.every(v=>v!==null&&v!==undefined&&Number.isInteger(Number(v))))
+          add('Timeouts',`${g.sides[0].short} ${timeouts[0]} · ${g.sides[1].short} ${timeouts[1]}`);
+      }
+      if(['mls','nwsl'].includes(g.league)){
+        const reds=[...box.teamKeys].find(k=>/^redcards?$/i.test(k.replace(/[^a-z]/gi,'')));
+        if(reds)add('Red cards',`${g.sides[0].short} ${box.teamStats[0].get(reds)?.display??'—'} · ${g.sides[1].short} ${box.teamStats[1].get(reds)?.display??'—'}`);
+      }
+    }
+    if(!chips.length)return '';
+    return `<section class="monitor-live-context" aria-label="Live game situation"><span class="monitor-live-context-label"><span class="live-dot" aria-hidden="true"></span>Live</span>${chips.join('')}</section>`;
+  }
   function monitorOverview(g,data){
     const colors=teamColors(g,data);
     const entry=getSummary(g);
@@ -655,8 +744,9 @@
     const sides=g.sides.slice(0,2).map((side,i)=>`<div class="monitor-team-line" style="--monitor-team-color:${colors[i]}"><span class="monitor-team-ident"><span class="monitor-team-mark" aria-hidden="true"></span>${!g.tennis&&/^\d+$/.test(side.id)?`<button type="button" class="monitor-team-name team-link" data-open-team="${esc(g.league)}:${esc(side.id)}" aria-label="Open ${esc(side.name)} season">${esc(side.name)}</button>`:`<span class="monitor-team-name">${esc(side.name)}</span>`}<small>${esc(side.short)}</small></span>${monitorScore(g,side)}</div>`).join('');
     return `<section class="monitor-overview" aria-label="Game overview">
       <header class="monitor-matchup"><div class="monitor-matchup-main">${sides}</div><div class="monitor-matchup-status"><strong>${esc(label)}</strong><span>${esc(g.detail??'')}</span></div></header>
+      ${monitorLiveContext(g,data)}
       <div class="monitor-overview-grid"><div class="monitor-chart-area">${graphSection(g,data,true)}</div><div class="monitor-stats-area">${statsSection(g,data,true)}</div></div>
-      <div class="monitor-overview-footer"><span>Move across the chart to inspect a game moment; tap to lock it.</span><span>${esc(g.venue||'')}</span></div>
+      <div class="monitor-overview-footer"><span>Hover to inspect; tap a moment to select or tap it again to clear.</span><span class="monitor-footer-venue">${esc(g.venue||'')}</span></div>
       ${entry?.error?`<p class="monitor-data-notice">${esc(entry.error)} ${data?'Showing last received data.':''}</p>`:''}
     </section>`;
   }
@@ -720,7 +810,7 @@
       const sets=g.tennis?`<div class="sets" aria-label="Set scores">${g.state==='pre'||!s.sets.length?'<span>—</span>':s.sets.map((v,i)=>`<span class="${v.winner?'won-set':''}" title="Set ${i+1}">${esc(v.value)}${v.tiebreak!==undefined?`<sup>${esc(v.tiebreak)}</sup>`:''}</span>`).join('')}${g.state==='in'&&s.point!=null?`<b class="point" title="Current game points">${esc(s.point)}</b>`:''}</div>`:`<span class="score">${esc(s.score)}</span>`;
       const position=s.rank?`<span class="standing-rank" title="ESPN ranked No. ${s.rank}">#${s.rank}</span>`:s.seed?`<span class="standing-rank" title="Tournament seed ${s.seed}">[${s.seed}]</span>`:s.worldRank?`<span class="standing-rank" title="World ranking ${s.worldRank}">#${s.worldRank}</span>`:'';
       const favored=!g.tennis&&/^\d+$/.test(s.id)&&isFavoriteTeam(g.league,s.id);
-      const teamStar=!g.tennis&&/^\d+$/.test(s.id)?`<button type="button" class="favorite-team-button ${favored?'is-favorite':''}" data-favorite-team="${esc(g.league)}:${esc(s.id)}" aria-pressed="${favored}" aria-label="${favored?'Remove':'Add'} ${esc(s.name)} ${favored?'from':'to'} favorite teams" title="${favored?'Unfavorite':'Favorite'} ${esc(s.name)}">${favored?'★':'☆'}</button>`:'';
+      const teamStar=!g.tennis&&/^\d+$/.test(s.id)?`<button type="button" class="favorite-team-button ${favored?'is-favorite':''}" data-favorite-team="${esc(g.league)}:${esc(s.id)}" data-favorite-name="${esc(s.name)}" data-favorite-logo="${esc(imageURL(s.logo)||'')}" aria-pressed="${favored}" aria-label="${favored?'Remove':'Add'} ${esc(s.name)} ${favored?'from':'to'} favorite teams" title="${favored?'Unfavorite':'Favorite'} ${esc(s.name)}">${favored?'★':'☆'}</button>`:'';
       return `<div class="side ${s.winner?'winner':''}"><div class="team-name">${badge}<span><span class="name">${position}${!g.tennis&&/^\d+$/.test(s.id)?`<button class="team-link" type="button" data-open-team="${esc(g.league)}:${esc(s.id)}" aria-label="Open ${esc(s.name)} team schedule">${esc(s.name)}</button>`:esc(s.name)}${teamStar}${s.serving?'<span class="serve" aria-label="Serving">●</span>':''}</span>${s.record?`<span class="record">${esc(s.record)}</span>`:''}</span></div>${sets}</div>`;
     }).join('');
     const sport=SPORTS.find(s=>s.id===g.league);
@@ -778,6 +868,7 @@
   function closeMonitor(){if(monitorDialog.open)monitorDialog.close();}
   monitorDialog.addEventListener('close',()=>{
     const id=monitorGame;
+    if(id)delete preferences(id).chartPinX;
     monitorGame='';document.body.classList.remove('monitor-open');
     const opener=monitorReturnFocus?.isConnected?monitorReturnFocus:
       [...document.querySelectorAll('[data-monitor-open]')].find(el=>el.dataset.monitorOpen===id);
@@ -803,6 +894,7 @@
   function syncStickyCounter(){
     const scrolled=dayHeading.getBoundingClientRect().bottom<=0&&stickyNav.getBoundingClientRect().top<=1;
     stickyNav.classList.toggle('has-sticky-count',scrolled);
+    stickyNav.classList.toggle('has-sticky-filters',scrolled);
   }
   function queueStickyCounter(){if(countTick)return;countTick=true;requestAnimationFrame(()=>{countTick=false;syncStickyCounter();});}
   window.addEventListener('scroll',queueStickyCounter,{passive:true});
@@ -817,7 +909,7 @@
       const ff=sources.map(d=>({def:d,feed:feeds.get(d.key)}));
       const allLeagueGames=ff.flatMap(({feed:f})=>f?f.games.map(g=>({game:g,stale:isStale(f)})):[])
         .sort((a,b)=>compareGames(a,b,sortMode));
-      const items=liveOnly?allLeagueGames.filter(i=>gamePhase(i)===0):allLeagueGames;
+      const items=allLeagueGames.filter(i=>(!liveOnly||gamePhase(i)===0)&&(!(pinnedOnly||favoritesOnly)||(pinnedOnly&&isPinned(i.game))||(favoritesOnly&&isFavoriteGame(i.game))));
       allItems.push(...items);allRawItems.push(...allLeagueGames);
       count+=allLeagueGames.length;live+=allLeagueGames.filter(i=>gamePhase(i)===0).length;
       const pending=ff.some(({feed:f})=>!f||f.loading&&!f.receivedAt);
@@ -829,42 +921,37 @@
       allNotices.push(notices);
       const subtitle=items.length?`${items.length} ${['atp','wta'].includes(s.id)?'matches':'games'}${incomplete?' · incomplete':''}`:['atp','wta'].includes(s.id)?'Singles · all available tour events':s.id==='cfb'?'FBS · all rankings':'Daily schedule';
       let content;
-      if(items.length)content=`<div class="games-grid">${items.map(i=>card(i.game,i.stale)).join('')}</div>`;
-      else if(liveOnly&&!pending&&!errors.length)content=`<div class="empty-state"><span class="empty-dash">—</span><div><p>No live games in ${esc(s.name)}</p><span>Turn off the live-only filter to see scheduled and final games.</span></div></div>`;
+      if(items.length){
+        const cap=selected==='all'&&grouped&&items.length>12;
+        content=`<div class="games-grid">${(cap?items.slice(0,12):items).map(i=>card(i.game,i.stale)).join('')}</div>${cap?`<button type="button" class="league-view-all" data-open-league="${s.id}" aria-label="View all ${items.length} ${esc(s.name)} events">View all ${items.length} ${['atp','wta'].includes(s.id)?'matches':'games'} in ${esc(s.name)} <span aria-hidden="true">→</span></button>`:''}`;
+      }
+      else if((liveOnly||pinnedOnly||favoritesOnly)&&!pending&&!errors.length)content=`<div class="empty-state"><span class="empty-dash">—</span><div><p>No matching games in ${esc(s.name)}</p><span>Adjust the game filters to show more events.</span></div></div>`;
       else if(pending)content=`<div class="empty-state loading-state"><span class="empty-dash">···</span><div><p>Loading ${esc(s.name)} scores…</p><span>Connecting to ESPN.</span></div></div>`;
       else content=`<div class="empty-state"><span class="empty-dash">—</span><div><p>${errors.length?'Waiting for scores':['atp','wta'].includes(s.id)?'No singles matches listed':'No games listed for this date'}</p><span>${errors.length?'Automatic retries are on. You can also use Refresh.':['atp','wta'].includes(s.id)?'Tour tournaments, including Grand Slams, Masters/1000s and other available events.':'Choose another date to see the schedule.'}</span></div></div>`;
       // Live-only always exposes matching cards even if a league was collapsed
       // in the normal scoreboard. The stored collapse preference is untouched.
-      const collapsed=collapsedLeagues.has(s.id)&&!(liveOnly&&items.length);
-      if(liveOnly&&!items.length&&!incomplete)return '';
-      return `<section class="league-section ${collapsed?'league-is-collapsed':''}" data-league="${s.id}" style="--league-color:${s.color}" aria-label="${esc(s.name)}"><div class="league-heading"><div class="league-heading-main"><h2><button type="button" class="league-collapse" data-collapse-league="${s.id}" aria-expanded="${!collapsed}" aria-controls="league-content-${s.id}" aria-label="${collapsed?'Expand':'Collapse'} ${esc(s.name)}"><span class="league-bar" aria-hidden="true"></span>${esc(s.name)}<span class="league-chevron" aria-hidden="true">⌄</span></button></h2></div><span class="league-subtitle">${subtitle}</span></div><div class="league-content" id="league-content-${s.id}" ${collapsed?'hidden':''}>${collapsed?'':notices+content}</div></section>`;
+      const collapsed=collapsedLeagues.has(s.id)&&!((liveOnly||pinnedOnly||favoritesOnly)&&items.length);
+      if((liveOnly||pinnedOnly||favoritesOnly)&&!items.length&&!incomplete)return '';
+      return `<section class="league-section ${collapsed?'league-is-collapsed':''}" data-league="${s.id}" style="--league-color:${s.color}" aria-label="${esc(s.name)}"><div class="league-heading"><div class="league-heading-main"><button type="button" class="league-collapse" data-collapse-league="${s.id}" aria-expanded="${!collapsed}" aria-controls="league-content-${s.id}" aria-label="${collapsed?'Expand':'Collapse'} ${esc(s.name)} games" title="${collapsed?'Expand':'Collapse'} ${esc(s.name)}"><svg class="league-chevron" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 9 7 7 7-7"/></svg></button><h2><button type="button" class="league-page-link" data-open-league="${s.id}" title="Show all ${esc(s.name)} games"><span class="league-bar" aria-hidden="true"></span>${esc(s.name)}<span class="league-link-arrow" aria-hidden="true">↗</span></button></h2></div><span class="league-subtitle">${subtitle}</span></div><div class="league-content" id="league-content-${s.id}" ${collapsed?'hidden':''}>${collapsed?'':notices+content}</div></section>`;
     }).join('');
     const across=!grouped&&(selected==='all'||selected.startsWith('sport:'));
     allItems.sort((a,b)=>compareGames(a,b,sortMode));
-    // Featured games are additional presentations of the same normalized game
-    // records, never moved away from their regular league position. Distinct
-    // feature sections never repeat each other: a pin takes precedence.
-    const allFollowed=[];
-    const known=new Set();
-    for(const league of orderedSports()){
-      const feed=feeds.get(league.id);
-      for(const game of feed?.games??[]){
-        const key=gameKey(game);
-        if(known.has(key))continue;known.add(key);
-        allFollowed.push({game,stale:isStale(feed)});
-      }
+    // Cards appear once, in their league or mixed-sort position. Pins and
+    // favorites are filters, not separately rendered copies. Counts are based
+    // on eligible visible-league games, never on duplicated presentations.
+    const uniqueGames=new Map(allRawItems.map(item=>[gameKey(item.game),item]));
+    count=uniqueGames.size;
+    live=[...uniqueGames.values()].filter(i=>gamePhase(i)===0).length;
+    const eligible=[...uniqueGames.values()].filter(i=>!liveOnly||gamePhase(i)===0);
+    const pinCount=eligible.filter(i=>isPinned(i.game)).length;
+    const favCount=eligible.filter(i=>isFavoriteGame(i.game)).length;
+    for(const id of ['pinned-filter-count','pinned-filter-count-sticky'])$(id).textContent=String(pinCount);
+    for(const id of ['favorite-filter-count','favorite-filter-count-sticky'])$(id).textContent=String(favCount);
+    for(const [id,active] of [['filter-pinned',pinnedOnly],['filter-pinned-sticky',pinnedOnly],['filter-favorites',favoritesOnly],['filter-favorites-sticky',favoritesOnly]]){
+      const el=$(id);el.setAttribute('aria-pressed',String(active));el.classList.toggle('is-active',active);
     }
-    // Live/total reflects all unique games represented on-screen, including
-    // followed games from another sport, never counting duplicated cards twice.
-    const counted=new Map([...allRawItems,...allFollowed.filter(i=>isPinned(i.game)||isFavoriteGame(i.game))].map(i=>[gameKey(i.game),i]));
-    count=counted.size;live=[...counted.values()].filter(i=>gamePhase(i)===0).length;
-    const eligible=allFollowed.filter(i=>!liveOnly||gamePhase(i)===0);
-    const pinnedItems=eligible.filter(i=>isPinned(i.game)).sort((a,b)=>compareGames(a,b,sortMode));
-    const favoriteItems=eligible.filter(i=>!isPinned(i.game)&&isFavoriteGame(i.game)).sort((a,b)=>compareGames(a,b,sortMode));
-    const featured=(label,items,slug,icon)=>items.length?`<section class="featured-games featured-${slug}" aria-label="${label}"><div class="featured-heading"><h2><span class="featured-symbol" aria-hidden="true">${icon}</span> ${label}</h2><span>${items.length} ${items.length===1?'game':'games'} · Also listed in their leagues</span></div><div class="games-grid">${items.map(i=>card(i.game,i.stale,false,slug)).join('')}</div></section>`:'';
-    const featuredHTML=featured('Pinned games',pinnedItems,'pinned','⌖')+featured('Favorite teams',favoriteItems,'favorites','★');
     const noLiveMessage=liveOnly&&!live&&!unknown?'<div class="empty-state" role="status"><span class="empty-dash">—</span><div><p>No live games in this selection</p><span>Turn off the live-only filter to see all games.</span></div></div>':'';
-    $('scores-panel').innerHTML=featuredHTML+(across?`<section class="league-section" aria-label="All games sorted together">${allNotices.join('')}${waiting.length?`<p class="loading-summary">Loading ${esc(waiting.join(', '))}…</p>`:''}${allItems.length?`<div class="games-grid">${allItems.map(i=>card(i.game,i.stale)).join('')}</div>`:waiting.length?'':`<div class="empty-state"><span class="empty-dash">—</span><div><p>${liveOnly&&!unknown?'No live games in this selection':unknown?'Live status temporarily unavailable':'No games listed for this date'}</p><span>${liveOnly&&!unknown?'Turn off the live-only filter to see the full schedule.':unknown?'A feed is missing or stale. Automatic retries are on.':'Choose another date to see the schedule.'}</span></div></div>`}</section>`:groupedHTML+noLiveMessage);
+    $('scores-panel').innerHTML=(across?`<section class="league-section" aria-label="All games sorted together">${allNotices.join('')}${waiting.length?`<p class="loading-summary">Loading ${esc(waiting.join(', '))}…</p>`:''}${allItems.length?`<div class="games-grid">${allItems.map(i=>card(i.game,i.stale)).join('')}</div>`:waiting.length?'':`<div class="empty-state"><span class="empty-dash">—</span><div><p>${liveOnly&&!unknown?'No live games in this selection':unknown?'Live status temporarily unavailable':'No games listed for this date'}</p><span>${liveOnly&&!unknown?'Turn off the live-only filter to see the full schedule.':unknown?'A feed is missing or stale. Automatic retries are on.':'Choose another date to see the schedule.'}</span></div></div>`}</section>`:groupedHTML+( (pinnedOnly||favoritesOnly)&&!allItems.length&&!unknown?'<div class="empty-state" role="status">No games match your pinned/favorite filters for this date.</div>':noLiveMessage));
     $('sort-scope').textContent=across?'All visible leagues, sorted together. Enable grouping for collapsible league sections.':'Sorting within each visible league.';
     $('sort-description').textContent=SORT_MODES[sortMode].help;
     $('group-sports').disabled=selected!=='all'&&!selected.startsWith('sport:');
@@ -938,17 +1025,74 @@
     $('sport-tabs').querySelector(`[data-sport="${buttons[next].dataset.sport}"]`)?.focus();
   });
   const settings=$('league-settings');
-  const showSettings=()=>{paintSettings();settings.showModal();};
+  let settingsTab='leagues';
+  function chooseSettingsTab(tab){
+    settingsTab=tab;
+    const showFaves=tab==='favorites';
+    $('settings-leagues-panel').hidden=showFaves;
+    $('settings-favorites-panel').hidden=!showFaves;
+    $('settings-tab-leagues').setAttribute('aria-selected',String(!showFaves));
+    $('settings-tab-favorites').setAttribute('aria-selected',String(showFaves));
+    $('settings-reset').hidden=showFaves;
+    $('settings-intro').textContent=showFaves?'Your saved favorite teams. Remove a star here or on any team page.':'Choose how each league appears and arrange its position. Saved in this browser.';
+    $('settings-note').textContent=showFaves?'Favorites are saved only in this browser.':'Reset restores the default league layout without changing favorites.';
+    if(showFaves)paintFavoriteTeams();
+  }
+  const favoriteLookups=new Set();
+  async function resolveFavoriteName(key){
+    if(favoriteLookups.has(key)||favoriteDetails[key]?.name||!favoriteTeams.has(key))return;
+    const [league,id]=key.split(':'),sport=SPORTS.find(s=>s.id===league);
+    if(!sport||!/^[0-9]+$/.test(id))return;
+    favoriteLookups.add(key);
+    try{
+      const url=`https://site.api.espn.com/apis/site/v2/sports/${sport.path}/teams/${encodeURIComponent(id)}`;
+      const data=await fetchESPNJSON(url,new AbortController().signal);
+      const raw=data?.team??data?.sports?.[0]?.leagues?.[0]?.teams?.[0]?.team;
+      const name=raw?.displayName??raw?.name;
+      if(favoriteTeams.has(key)&&typeof name==='string'&&name.trim()){
+        favoriteDetails[key]={name:name.trim().slice(0,100),logo:imageURL(raw.logo??raw.logos?.[0]?.href)||''};
+        saveFavorites();
+        if(settings.open&&settingsTab==='favorites')paintFavoriteTeams();
+      }
+    }catch{}finally{favoriteLookups.delete(key);}
+  }
+  function paintFavoriteTeams(){
+    // Backfill names for favorites created by older versions, without relying on
+    // the current scoreboard day having a game involving the team.
+    let updated=false;
+    const items=[...favoriteTeams].map(key=>{
+      const [league,id]=key.split(':');
+      let info=favoriteDetails[key];
+      if(!info?.name){
+        const game=[...feeds.values()].flatMap(f=>f.games??[]).find(g=>g.league===league&&g.sides.some(s=>String(s.id)===id));
+        const side=game?.sides.find(s=>String(s.id)===id);
+        if(side){info={name:side.name,logo:imageURL(side.logo)||''};favoriteDetails[key]=info;updated=true;}
+      }
+      return {key,league,id,name:info?.name||`Team #${id}`,logo:imageURL(info?.logo),leagueName:SPORTS.find(s=>s.id===league)?.name||league};
+    }).sort((a,b)=>a.leagueName.localeCompare(b.leagueName)||a.name.localeCompare(b.name));
+    if(updated)saveFavorites();
+    for(const item of items)if(!favoriteDetails[item.key]?.name)resolveFavoriteName(item.key);
+    $('settings-favorites-count').textContent=String(items.length);
+    $('settings-favorites-list').innerHTML=items.length?items.map(t=>`<div class="settings-favorite-row" data-favorite-key="${esc(t.key)}"><span class="settings-favorite-logo">${t.logo?`<img src="${esc(t.logo)}" alt="" loading="lazy" referrerpolicy="no-referrer">`:'★'}</span><span class="settings-favorite-identity"><strong>${esc(t.name)}</strong><small>${esc(t.leagueName)}</small></span><button type="button" class="settings-unfavorite" data-settings-unfavorite="${esc(t.key)}" aria-label="Remove ${esc(t.name)} from favorite teams" title="Remove favorite">★ <span>Remove</span></button></div>`).join(''):'<div class="settings-favorites-empty">No favorite teams yet. Star a team on a game card or its team page to see it here.</div>';
+  }
+  const showSettings=()=>{paintSettings();chooseSettingsTab(settingsTab);settings.showModal();};
   const paintSettings=()=>{
     $('settings-list').innerHTML=leagueOrder.map((id,index)=>{
-      const s=SPORTS.find(s=>s.id===id),visible=!hiddenLeagues.has(id);
-      return `<div class="settings-item ${visible?'':'settings-item-hidden'}" data-settings-league="${id}">
-        <label class="settings-item-label"><input type="checkbox" data-league-visible="${id}" ${visible?'checked':''}><span class="settings-color" style="background:${s.color}"></span><span>${esc(s.name)}</span></label>
+      const s=SPORTS.find(s=>s.id===id),state=hiddenLeagues.has(id)?'hidden':collapsedLeagues.has(id)?'collapsed':'expanded';
+      return `<div class="settings-item ${state==='hidden'?'settings-item-hidden':''}" data-settings-league="${id}">
+        <label class="settings-item-label"><span class="settings-color" style="background:${s.color}"></span><span>${esc(s.name)}</span><select class="settings-display-select" data-league-display="${id}" aria-label="${esc(s.name)} display state">${[['expanded','Expanded'],['collapsed','Collapsed'],['hidden','Hidden']].map(([value,label])=>`<option value="${value}"${state===value?' selected':''}>${label}</option>`).join('')}</select></label>
         <div class="settings-order" aria-label="Order ${esc(s.name)}"><span class="settings-position">${index+1}</span><span class="settings-drag" draggable="true" data-settings-drag="${id}" title="Drag ${esc(s.name)} to reorder" aria-hidden="true">⠿</span><button type="button" data-settings-move="${id}" data-direction="-1" ${index===0?'disabled':''} aria-label="Move ${esc(s.name)} up">↑</button><button type="button" data-settings-move="${id}" data-direction="1" ${index===leagueOrder.length-1?'disabled':''} aria-label="Move ${esc(s.name)} down">↓</button></div></div>`;
     }).join('');
   };
   function applySettings(){resetSelectionIfHidden();saveLeagueLayout();paintSettings();paintSportTabs();render();if(!busy)refresh();}
   $('settings-open').addEventListener('click',showSettings);
+  $('settings-tab-leagues').addEventListener('click',()=>chooseSettingsTab('leagues'));
+  $('settings-tab-favorites').addEventListener('click',()=>chooseSettingsTab('favorites'));
+  $('settings-favorites-list').addEventListener('click',event=>{
+    const control=event.target.closest('[data-settings-unfavorite]');if(!control)return;
+    const [league,id]=control.dataset.settingsUnfavorite.split(':');
+    if(isFavoriteTeam(league,id)){toggleTeamFavorite(league,id);paintFavoriteTeams();}
+  });
   $('settings-close').addEventListener('click',()=>settings.close());
   $('settings-done').addEventListener('click',()=>settings.close());
   settings.addEventListener('click',event=>{if(event.target===settings)settings.close();});
@@ -957,10 +1101,13 @@
     applySettings();$('announcer').textContent='League layout reset to defaults.';
   });
   $('settings-list').addEventListener('change',event=>{
-    const check=event.target.closest('[data-league-visible]');if(!check)return;
-    const id=check.dataset.leagueVisible;
-    if(!check.checked&&hiddenLeagues.size>=leagueIds.length-1){check.checked=true;$('announcer').textContent='Keep at least one league visible.';return;}
-    if(check.checked)hiddenLeagues.delete(id);else hiddenLeagues.add(id);
+    const select=event.target.closest('[data-league-display]');if(!select)return;
+    const id=select.dataset.leagueDisplay,state=select.value;
+    if(!['expanded','collapsed','hidden'].includes(state))return;
+    if(state==='hidden'&&!hiddenLeagues.has(id)&&hiddenLeagues.size>=leagueIds.length-1){select.value=collapsedLeagues.has(id)?'collapsed':'expanded';$('announcer').textContent='Keep at least one league visible.';return;}
+    hiddenLeagues.delete(id);collapsedLeagues.delete(id);
+    if(state==='hidden')hiddenLeagues.add(id);
+    else if(state==='collapsed')collapsedLeagues.add(id);
     applySettings();
   });
   $('settings-list').addEventListener('click',event=>{
@@ -989,8 +1136,23 @@
     clearSettingDrag();draggedSetting='';
   });
   $('settings-list').addEventListener('dragend',()=>{clearSettingDrag();draggedSetting='';});
+  for(const [id,key] of [['filter-pinned','pinnedOnly'],['filter-pinned-sticky','pinnedOnly'],['filter-favorites','favoritesOnly'],['filter-favorites-sticky','favoritesOnly']]){
+    $(id).addEventListener('click',()=>{
+      if(key==='pinnedOnly')pinnedOnly=!pinnedOnly;else favoritesOnly=!favoritesOnly;
+      saveView();render();
+      $(id).focus({preventScroll:true});
+    });
+  }
   // League controls use delegation because the scoreboard is rerendered as feeds refresh.
   $('scores-panel').addEventListener('click',event=>{
+    const link=event.target.closest('[data-open-league]');
+    if(link){
+      const id=link.dataset.openLeague;
+      // Opening the league is an explicit request for its full schedule.
+      liveOnly=false;pinnedOnly=false;favoritesOnly=false;saveView();
+      collapsedLeagues.delete(id);saveLeagueLayout();selectTab(id);
+      return;
+    }
     const collapse=event.target.closest('[data-collapse-league]');
     if(collapse){
       const id=collapse.dataset.collapseLeague;
@@ -1005,7 +1167,7 @@
     const pin=event.target.closest('[data-pin-game]');
     if(pin){const game=findGame(pin.dataset.pinGame);if(game)togglePin(game);return;}
     const favorite=event.target.closest('[data-favorite-team]');
-    if(favorite){const [league,id]=favorite.dataset.favoriteTeam.split(':');toggleTeamFavorite(league,id);return;}
+    if(favorite){const [league,id]=favorite.dataset.favoriteTeam.split(':');toggleTeamFavorite(league,id,{name:favorite.dataset.favoriteName,logo:favorite.dataset.favoriteLogo});return;}
     const monitor=event.target.closest('[data-monitor-open]');
     if(monitor){openMonitor(monitor.dataset.monitorOpen);return;}
     const toggle=event.target.closest('[data-expand]');
@@ -1064,16 +1226,27 @@
   monitorDialog.addEventListener('pointermove',moveChartCursor);
   monitorDialog.addEventListener('pointerdown',moveChartCursor);
   monitorDialog.addEventListener('pointerleave',event=>{
-    const svg=event.target.closest?.('.monitor-interactive-chart');if(!svg||svg!==event.target||svg.dataset.chartPinned==='true')return;
-    for(const shape of svg.querySelectorAll('.chart-cursor-line,.chart-cursor-away,.chart-cursor-home'))shape.setAttribute('visibility','hidden');
-    const tooltip=svg.closest('.monitor-chart-wrap')?.querySelector('[data-chart-tooltip]');if(tooltip)tooltip.hidden=true;
+    const svg=event.target.closest?.('.monitor-interactive-chart');
+    if(!svg||svg!==event.target||svg.dataset.chartPinned==='true')return;
+    clearChartCursor(svg);
   },true);
+  monitorDialog.addEventListener('click',event=>{
+    const clear=event.target.closest('[data-chart-clear]');
+    if(clear){clearChartCursor(clear.closest('.monitor-chart-wrap')?.querySelector('.monitor-interactive-chart'));return;}
+    // A pinned inspection is also dismissed by clicking elsewhere in the monitor.
+    if(!event.target.closest('.monitor-chart-wrap')){
+      const chart=monitorBody.querySelector('.monitor-interactive-chart');
+      if(chart?.dataset.chartPinned==='true')clearChartCursor(chart);
+    }
+  });
   monitorDialog.addEventListener('keydown',event=>{
-    const svg=event.target.closest?.('.monitor-interactive-chart');if(!svg||!['ArrowLeft','ArrowRight','Escape'].includes(event.key))return;
+    const svg=event.target.closest?.('.monitor-interactive-chart');
     if(event.key==='Escape'){
-      if(svg.dataset.chartPinned==='true'){event.stopPropagation();event.preventDefault();svg.dataset.chartPinned='false';delete preferences(svg.dataset.chartGame).chartPinX;}
+      const chart=svg??monitorBody.querySelector('.monitor-interactive-chart');
+      if(chart?.dataset.chartPinned==='true'){event.stopPropagation();event.preventDefault();clearChartCursor(chart);}
       return;
     }
+    if(!svg||!['ArrowLeft','ArrowRight'].includes(event.key))return;
     event.preventDefault();const hi=Number(svg.dataset.chartHi),old=Number(svg.dataset.chartPinnedX??0);
     svg.dataset.chartPinned='false';chartCursorAt(svg,old+(event.key==='ArrowRight'?1:-1)*hi/48,true);
   });

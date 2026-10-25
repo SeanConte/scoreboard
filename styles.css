@@ -781,3 +781,198 @@ button.stat-match .stat-match-values>span>span{color:#e1be82;font-size:11px}
  .sticky-score-nav.has-sticky-count .sticky-live-summary{grid-row:3;grid-column:1/-1;justify-self:center}
  .sticky-score-nav .sticky-nav-actions{grid-column:1/-1;justify-self:end}
 }
+
+/* 0_36 — touch-friendly chart inspection and feed-backed live context. */
+.chart-hover-tooltip.is-pinned{pointer-events:auto;padding-right:33px}
+.chart-hover-clear{position:absolute;right:5px;top:4px;display:grid;place-items:center;height:27px;width:27px;border:1px solid #7c6b4e;background:#333029;color:#f5dfbb;border-radius:5px;font-size:19px;line-height:1;cursor:pointer}
+.chart-hover-clear:focus-visible{outline:2px solid #f3cf8b;outline-offset:2px}
+.monitor-live-context{display:flex;flex-wrap:wrap;align-items:center;gap:7px 9px;border:1px solid #454137;background:#252521;border-radius:8px;padding:9px 11px;font:12px/1.3 Arial,sans-serif}
+.monitor-live-context-label{display:flex;align-items:center;gap:6px;color:#f1d7ac;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-right:4px}
+.monitor-live-chip{display:flex;align-items:baseline;gap:7px;background:#302e29;padding:6px 9px;border-radius:5px;min-width:0}
+.monitor-live-chip small{color:#afa99b;font-size:11px}
+.monitor-live-chip strong{color:#ece7dc;font-size:12px;font-weight:750}
+@media(max-width:650px){
+ .monitor-chart-area .chart-panel .monitor-chart-wrap{display:flex;flex-direction:column;align-items:stretch;gap:7px}
+ .monitor-chart-wrap .chart-hover-tooltip{position:relative!important;top:auto!important;left:auto!important;right:auto!important;transform:none!important;width:100%;min-width:0;max-width:none;box-sizing:border-box;margin:0;font-size:11px;box-shadow:none;pointer-events:auto}
+ .monitor-chart-wrap .chart-hover-tooltip:not(.is-pinned){pointer-events:none}
+ .monitor-live-context{padding:8px;gap:5px}
+ .monitor-live-chip{flex:1 1 auto;justify-content:space-between;gap:6px;padding:5px 7px}
+}
+
+/* 0_37: filters, discrete collapse control, and restrained league-page links. */
+.saved-game-filters{display:inline-flex;gap:7px;align-items:center;flex:0 0 auto;margin-right:10px}
+.saved-filter{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:39px;padding:4px 9px;border:1px solid #4b4437;border-radius:8px;color:#ac9e86;background:#25241f;cursor:pointer}
+.saved-filter:hover,.saved-filter:focus-visible{color:#f4d29a;border-color:#9d8458;background:#363127}
+.saved-filter.is-active{color:#f5ca83;background:#453521;border-color:#e0b368;box-shadow:inset 0 0 0 1px #9d7741}
+.saved-filter-number{font:700 11px ui-monospace,monospace;min-width:13px}
+.saved-filter:focus-visible,.league-page-link:focus-visible,.league-view-all:focus-visible{outline:2px solid #e3bd74;outline-offset:2px}
+.settings-item-label{gap:8px;flex:1;flex-wrap:wrap}
+.settings-display-select{border:1px solid #575043;border-radius:6px;background:#302d27;color:#f0e5d0;font-size:11px;font-weight:650;padding:7px 5px;margin-left:auto;max-width:114px}
+.league-heading .league-collapse{border:1px solid #50493c;border-radius:7px;background:#292721;color:#d2c8b5;width:34px;height:34px;min-width:34px;padding:0;display:grid;place-items:center;cursor:pointer}
+.league-heading .league-collapse:hover{background:#3d362b;border-color:#bb965d;color:#f9d08e}
+.league-chevron{margin:0;transition:transform .15s ease}
+.league-page-link{display:inline-flex;align-items:center;gap:9px;border:0;padding:7px 2px;background:none;color:var(--foreground);font:inherit;font-size:19px;font-weight:750;cursor:pointer;letter-spacing:-.02em;text-align:left}
+.league-page-link:hover{color:var(--primary)}
+.league-link-arrow{color:#938877;font-size:13px;font-weight:500;opacity:.65}
+.league-page-link:hover .league-link-arrow{opacity:1;color:var(--primary)}
+.league-view-all{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin:13px 0 4px;padding:13px 15px;border:1px solid #51483c;border-radius:8px;background:#24231f;color:#edcea0;font:700 12px Arial,sans-serif;cursor:pointer}
+.league-view-all:hover{background:#373026;border-color:#ba9356}
+.footer-version{font:11px ui-monospace,monospace;opacity:.55;align-self:flex-end;white-space:nowrap;margin-left:auto}
+@media(max-width:650px){.saved-game-filters{margin-right:0}.saved-filter{padding:4px 7px}.league-page-link{font-size:17px}.league-heading .league-collapse{height:36px;width:36px;min-width:36px}}
+
+@media(max-width:650px){footer .footer-version{text-align:right;align-self:flex-end}}
+
+/* 0_38: legible pin glyph, sticky filter rail, and Favorites management. */
+.double-pin-icon{flex:none;display:block}
+.sticky-filter-rail{display:none;position:absolute;z-index:4;left:50%;top:50%;transform:translate(-50%,-50%);align-items:center;justify-content:center;gap:7px;white-space:nowrap}
+.sticky-score-nav.has-sticky-count .sticky-filter-rail{display:flex}
+.sticky-filter-rail .sticky-live-summary,.sticky-score-nav .sticky-filter-rail .sticky-live-summary{position:static;top:auto;left:auto;right:auto;transform:none;margin:0;display:inline-flex;pointer-events:auto;box-shadow:none}
+.sticky-saved-filters{display:none;align-items:center;gap:6px}
+.sticky-score-nav.has-sticky-filters .sticky-saved-filters{display:inline-flex}
+.sticky-filter-rail .saved-filter{min-height:34px;padding:4px 7px;gap:2px}
+.sticky-filter-rail .saved-filter svg{width:28px;height:21px}
+.sticky-filter-rail .saved-filter-number{font-size:10px;min-width:10px}
+/* When more than the live counter is visible, reserve a full row instead of
+   allowing the counters to mask the league icons or date controls. */
+@media(min-width:761px){
+ .sticky-score-nav.has-sticky-filters{flex-wrap:wrap;column-gap:14px;row-gap:4px}
+ .sticky-score-nav.has-sticky-filters .sport-tabs{flex:1 1 0;min-width:0}
+ .sticky-score-nav.has-sticky-filters .sticky-filter-rail{order:3;position:static;transform:none;width:100%;flex-basis:100%;justify-content:center;padding:0 0 3px}
+}
+.settings-tabs{display:flex;gap:6px;padding:2px 18px 10px;border-bottom:1px solid #39362e}
+.settings-tabs button{background:#292722;border:1px solid #4a4338;color:#bbb1a3;padding:9px 14px;border-radius:7px;font:700 12px Arial,sans-serif;cursor:pointer}
+.settings-tabs button[aria-selected="true"]{color:#f5d49c;border-color:#ae8a51;background:#3a3022}
+.settings-tab-count{font:700 10px ui-monospace,monospace;opacity:.75;padding-left:3px}
+.settings-favorites-list{padding:9px 16px 15px;max-height:55dvh;overflow:auto}
+.settings-favorite-row{display:flex;align-items:center;gap:12px;min-height:66px;padding:8px;border-bottom:1px solid #37332b}
+.settings-favorite-logo{width:42px;height:42px;display:grid;place-items:center;flex:none;background:#292722;border-radius:7px;color:#e7ba72}
+.settings-favorite-logo img{width:38px;height:38px;object-fit:contain}
+.settings-favorite-identity{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px}
+.settings-favorite-identity strong{font:700 13px Arial,sans-serif;overflow-wrap:anywhere}
+.settings-favorite-identity small{font:11px Arial,sans-serif;color:#b3a899}
+.settings-unfavorite{flex:none;background:#29231b;border:1px solid #6d5531;color:#e7bc76;border-radius:7px;font:700 12px Arial,sans-serif;padding:8px 9px;cursor:pointer}
+.settings-unfavorite:hover{border-color:#edc074;color:#fff}
+.settings-favorites-empty{padding:27px 9px;color:#b9afa2;line-height:1.55;font-size:13px}
+#settings-leagues-panel[hidden],#settings-favorites-panel[hidden],#settings-reset[hidden]{display:none!important}
+@media(max-width:760px){
+ .sticky-score-nav .sticky-filter-rail{position:static;left:auto;right:auto;top:auto;transform:none;grid-column:1;grid-row:2;justify-self:start;max-width:100%}
+ .sticky-score-nav.has-sticky-filters .sticky-filter-rail{grid-row:3;grid-column:1/-1;justify-self:center;max-width:100%}
+ .sticky-score-nav.has-sticky-filters .sticky-nav-actions{grid-row:2;grid-column:1/-1;justify-self:end}
+ .sticky-filter-rail .sticky-live-summary,.sticky-score-nav .sticky-filter-rail .sticky-live-summary{font-size:10px;padding:6px 7px;gap:4px}
+ .sticky-filter-rail .sticky-live-summary strong{font-size:15px}
+ .sticky-filter-rail .saved-filter{min-height:32px;padding:4px 5px}
+ .sticky-filter-rail .saved-filter svg{width:25px}
+ .settings-favorite-row{gap:8px}
+ .settings-unfavorite span{display:none}
+}
+@media(max-width:355px){
+ .sticky-score-nav .sticky-filter-rail{grid-row:3;grid-column:1/-1;justify-self:center}
+ .sticky-score-nav .sticky-nav-actions{grid-column:1/-1;grid-row:2;justify-self:end}
+}
+
+
+/* 0_39 experiment: a steady two-row navigation with settings in the top-right.
+   Sport icons get their own row; date, saved filters and live summary share the second. */
+.sticky-score-nav,
+.sticky-score-nav.has-sticky-filters{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-rows:auto auto;
+  align-items:center;
+  column-gap:7px;row-gap:4px;
+  min-height:0;
+  padding:6px 0 7px;
+}
+.sticky-score-nav>.sport-tabs,
+.sticky-score-nav.has-sticky-count>.sport-tabs,
+.sticky-score-nav.has-sticky-filters>.sport-tabs{
+  grid-row:1!important;grid-column:1!important;
+  min-width:0;width:100%!important;max-width:100%!important;
+  flex:auto;min-height:37px;height:42px;
+  padding-right:2px!important;
+}
+.sticky-score-nav>#settings-open{
+  grid-row:1;grid-column:2;justify-self:end;
+  width:35px;height:35px;min-width:35px;
+}
+.sticky-score-nav>.sticky-nav-second{
+  grid-row:2;grid-column:1/-1;
+  display:flex;align-items:center;justify-content:space-between;
+  min-width:0;gap:7px;width:100%;
+}
+.sticky-score-nav .sticky-nav-second .sticky-filter-rail,
+.sticky-score-nav.has-sticky-count .sticky-nav-second .sticky-filter-rail,
+.sticky-score-nav.has-sticky-filters .sticky-nav-second .sticky-filter-rail{
+  position:static!important;display:flex!important;
+  align-items:center;justify-content:flex-start;
+  transform:none!important;left:auto!important;right:auto!important;top:auto!important;
+  order:1!important;width:auto!important;max-width:none!important;
+  flex:0 1 auto!important;gap:5px;min-width:0;
+  padding:0!important;margin:0!important;
+}
+.sticky-score-nav .sticky-nav-second .sticky-saved-filters,
+.sticky-score-nav.has-sticky-filters .sticky-nav-second .sticky-saved-filters{display:flex!important;gap:5px;align-items:center}
+.sticky-score-nav .sticky-nav-second .sticky-live-summary{display:none!important}
+.sticky-score-nav.has-sticky-count .sticky-nav-second .sticky-live-summary{display:inline-flex!important;white-space:nowrap;font-size:11px;min-height:31px;padding:5px 8px}
+.sticky-score-nav .sticky-nav-second .sticky-nav-actions,
+.sticky-score-nav.has-sticky-count .sticky-nav-second .sticky-nav-actions,
+.sticky-score-nav.has-sticky-filters .sticky-nav-second .sticky-nav-actions{
+  order:2!important;grid-row:auto!important;grid-column:auto!important;
+  display:flex!important;align-items:center;justify-content:flex-end;
+  flex:0 0 auto;margin-left:auto!important;margin-right:0!important;
+  padding:0!important;min-width:0;width:auto!important;
+}
+/* Invisible original controls remain in the DOM for legacy state synchronization. */
+.sort-toolbar .saved-game-filters{display:none!important}
+.sticky-score-nav .sticky-nav-second .saved-filter{min-height:32px;padding:3px 6px;gap:3px}
+.sticky-score-nav .sticky-nav-second .saved-filter svg{width:28px;height:23px}
+.sticky-score-nav .sticky-nav-second .saved-filter-number{font-size:10px}
+@media(max-width:760px){
+  .sticky-score-nav,.sticky-score-nav.has-sticky-filters{grid-template-columns:minmax(0,1fr) 36px;row-gap:3px}
+  .sticky-score-nav .sticky-nav-second{gap:4px}
+  .sticky-score-nav .sticky-nav-second .sticky-filter-rail{gap:3px}
+  .sticky-score-nav .sticky-nav-second .sticky-saved-filters{gap:3px}
+  .sticky-score-nav .sticky-nav-second .saved-filter{min-height:30px;padding:3px 4px;gap:2px}
+  .sticky-score-nav .sticky-nav-second .saved-filter svg{width:24px;height:20px}
+  .sticky-score-nav.has-sticky-count .sticky-nav-second .sticky-live-summary{padding:4px 5px;gap:3px;min-height:28px;font-size:9px}
+  .sticky-score-nav.has-sticky-count .sticky-nav-second .sticky-live-summary strong{font-size:12px}
+  .sticky-score-nav .sticky-nav-second .date-controls{gap:1px;padding:2px}
+  .sticky-score-nav .sticky-nav-second .date-controls button{min-width:23px;width:auto;font-size:16px;height:31px}
+  .sticky-score-nav .sticky-nav-second .date-picker input{width:102px;font-size:11px}
+  .sticky-score-nav .sticky-nav-second .date-controls .today-button{font-size:10px;padding:0 3px}
+}
+@media(max-width:355px){
+  .sticky-score-nav .sticky-nav-second .saved-filter{padding:2px 2px}
+  .sticky-score-nav .sticky-nav-second .saved-filter svg{width:21px;height:19px}
+  .sticky-score-nav .sticky-nav-second .date-picker input{width:89px;font-size:10px}
+  .sticky-score-nav .sticky-nav-second .date-controls button{min-width:20px;font-size:14px}
+  .sticky-score-nav .sticky-nav-second .date-controls .today-button{font-size:9px;padding:0 2px}
+  .sticky-score-nav.has-sticky-count .sticky-nav-second .sticky-live-summary{padding:3px;gap:2px}
+  .sticky-score-nav.has-sticky-count .sticky-nav-second .sticky-live-summary strong{font-size:11px}
+}
+
+
+/* 0_39: Horizontal-only sports navigation. On Windows, overflow-x:auto used
+   to manufacture an unwanted vertical scroll bar when a family expanded. */
+.sticky-score-nav>.sport-tabs,
+.sticky-score-nav.has-sticky-count>.sport-tabs,
+.sticky-score-nav.has-sticky-filters>.sport-tabs{
+  height:48px!important;
+  min-height:48px!important;
+  max-height:48px!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  overscroll-behavior-x:contain;
+  overscroll-behavior-y:none;
+  scrollbar-width:none;
+  padding:2px 1px!important;
+  align-items:center!important;
+  flex-wrap:nowrap!important;
+}
+.sticky-score-nav>.sport-tabs::-webkit-scrollbar{display:none}
+.sticky-score-nav .sport-tabs .sport-family{max-height:46px}
+.sticky-score-nav .sport-tabs .sport-family-trigger,
+.sticky-score-nav .sport-tabs [data-sport],
+.sticky-score-nav .sport-tabs .league-nav-choice,
+.sticky-score-nav .sport-tabs .family-all-choice{height:39px;min-height:39px}
+.sticky-score-nav .sport-tabs .sport-family.family-expanded{padding:1px;max-height:46px}

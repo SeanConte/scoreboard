@@ -126,7 +126,7 @@ function normalize(data, league, day, zone, tour) {
                 const sit = c.situation;
                 const context=competitionContext(league,e,c,data);
                 const detail = tennis ? [g.grouping?.displayName, c.round?.displayName].filter(Boolean).join(' · ') : league === 'mlb' && state === 'in' && sit ? `${sit.outs ?? 0} out${sit.outs === 1 ? '' : 's'}${sit.balls != null ? ' · ' + sit.balls + '–' + (sit.strikes ?? 0) + ' count' : ''}` : (league === 'nfl' || league === 'cfb') && state === 'in' ? (sit?.downDistanceText ?? '') : (c.broadcasts ?? []).flatMap((b) => b.names ?? []).join(' · ');
-                games.push({ seasonYear:Number(e.season?.year)||null, postseason:e.season?.type===3||Number(e.season?.type)===3, eventId:String(e.id??c.id), id: tennis ? `${tour||league}-${c.id}` : `${league}-${c.id}`, league, tour:tennis?(tour||league):null, date, state, ...remainingTime(league,status,e.season?.type===3), status: type.shortDetail ?? type.description ?? 'Scheduled', title: tennis ? e.name : e.name ?? '', detail, context, venue: c.venue?.court ?? c.venue?.fullName ?? '', url: safeLink((e.links ?? []).find((l) => l.rel?.includes('summary'))?.href ?? e.links?.[0]?.href), sides, tennis });
+                games.push({ seasonYear:Number(e.season?.year)||null, postseason:e.season?.type===3||Number(e.season?.type)===3, eventId:String(e.id??c.id), id: tennis ? `${tour||league}-${c.id}` : `${league}-${c.id}`, league, tour:tennis?(tour||league):null, date, state, ...remainingTime(league,status,e.season?.type===3), status: type.shortDetail ?? type.description ?? 'Scheduled', title: tennis ? e.name : e.name ?? '', detail, context, venue: c.venue?.court ?? c.venue?.fullName ?? '', situation: sit??null, url: safeLink((e.links ?? []).find((l) => l.rel?.includes('summary'))?.href ?? e.links?.[0]?.href), sides, tennis });
             }
         }
     }
@@ -225,17 +225,20 @@ const SORT_MODES={
   function dayShift(day,n) {return new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);}
   function validDay(day) {return /^\d{4}-\d{2}-\d{2}$/.test(day)&&day>=MIN_DAY&&day<=MAX_DAY&&Number.isFinite(Date.parse(day))&&new Date(day).toISOString().slice(0,10)===day;}
   let day=dateInZone(new Date(),zone),selected='all',followToday=true,revision=0,busy=false,lastCheck=0;
-  let sortMode='original',grouped=true,liveOnly=false;
+  let sortMode='original',grouped=true,liveOnly=false,pinnedOnly=false,favoritesOnly=false;
   // Independent local preferences. Pins belong to a calendar day; teams are
   // identified by league and stable ESPN team ID (never a display name).
   const FAVORITES_KEY='scoreboard-favorites-v1';
-  let pinnedByDay={},favoriteTeams=new Set();
+  let pinnedByDay={},favoriteTeams=new Set(),favoriteDetails={};
   try {
     const saved=JSON.parse(localStorage.getItem(FAVORITES_KEY)||'{}');
     if(saved.pins&&typeof saved.pins==='object'&&!Array.isArray(saved.pins))for(const [date,entries] of Object.entries(saved.pins)){
       if(validDay(date)&&Array.isArray(entries))pinnedByDay[date]=[...new Set(entries.filter(x=>typeof x==='string'&&/^[a-z0-9-]+:[a-z0-9-]+$/i.test(x)))].slice(0,100);
     }
     if(Array.isArray(saved.teams))favoriteTeams=new Set(saved.teams.filter(x=>typeof x==='string'&&/^[a-z0-9-]+:\d+$/i.test(x)));
+    if(saved.details&&typeof saved.details==='object'&&!Array.isArray(saved.details)){
+      for(const [key,value] of Object.entries(saved.details))if(favoriteTeams.has(key)&&value&&typeof value==='object')favoriteDetails[key]={name:String(value.name??'').slice(0,100),logo:String(value.logo??'').slice(0,500)};
+    }
   } catch {}
   const gameKey=g=>`${g.league}:${g.id}`;
   const sideKey=(league,id)=>`${league}:${id}`;
@@ -248,7 +251,7 @@ const SORT_MODES={
       const dates=Object.keys(pinnedByDay).sort().slice(-120),pins={};
       for(const d of dates)if(pinnedByDay[d]?.length)pins[d]=pinnedByDay[d];
       pinnedByDay=pins;
-      localStorage.setItem(FAVORITES_KEY,JSON.stringify({pins,teams:[...favoriteTeams]}));
+      localStorage.setItem(FAVORITES_KEY,JSON.stringify({pins,teams:[...favoriteTeams],details:Object.fromEntries([...favoriteTeams].filter(key=>favoriteDetails[key]).map(key=>[key,favoriteDetails[key]]))}));
     }catch{}
   }
   function togglePin(g){
@@ -260,18 +263,19 @@ const SORT_MODES={
     if(expandedGame===g.id&&expandedCopy==='pinned'&&!set.has(key))expandedCopy='original';
     saveFavorites();render();
   }
-  function toggleTeamFavorite(league,id){
+  function toggleTeamFavorite(league,id,info={}){
     if(!SPORTS.some(s=>s.id===league)||['atp','wta'].includes(league)||!/^\d+$/.test(String(id)))return;
     const key=sideKey(league,id);
-    if(favoriteTeams.has(key))favoriteTeams.delete(key);else favoriteTeams.add(key);
+    if(favoriteTeams.has(key)){favoriteTeams.delete(key);delete favoriteDetails[key];}
+    else {favoriteTeams.add(key);if(info.name)favoriteDetails[key]={name:String(info.name).slice(0,100),logo:String(info.logo??'').slice(0,500)};}
     if(expandedCopy==='favorites'&&expandedGame){
       const game=findGame(expandedGame);
       if(game&&!isFavoriteGame(game))expandedCopy='original';
     }
     saveFavorites();render();if(teamMode)renderTeamPage();if(!busy)refresh();
   }
-  try {const pref=JSON.parse(localStorage.getItem('scoreboard-sort-v1')||'{}');const migrated={start:'original','gap-time':'close-late'}[pref.sort]??pref.sort;if(SORT_MODES[migrated])sortMode=migrated;if(typeof pref.grouped==='boolean')grouped=pref.grouped;if(typeof pref.liveOnly==='boolean')liveOnly=pref.liveOnly;}catch{}
-  function saveView(){try{localStorage.setItem('scoreboard-sort-v1',JSON.stringify({sort:sortMode,grouped,liveOnly}));}catch{}}
+  try {const pref=JSON.parse(localStorage.getItem('scoreboard-sort-v1')||'{}');const migrated={start:'original','gap-time':'close-late'}[pref.sort]??pref.sort;if(SORT_MODES[migrated])sortMode=migrated;if(typeof pref.grouped==='boolean')grouped=pref.grouped;if(typeof pref.liveOnly==='boolean')liveOnly=pref.liveOnly;if(typeof pref.pinnedOnly==='boolean')pinnedOnly=pref.pinnedOnly;if(typeof pref.favoritesOnly==='boolean')favoritesOnly=pref.favoritesOnly;}catch{}
+  function saveView(){try{localStorage.setItem('scoreboard-sort-v1',JSON.stringify({sort:sortMode,grouped,liveOnly,pinnedOnly,favoritesOnly}));}catch{}}
   // League layout is independent of dates and of the existing sort preferences.
   // Stable league IDs, not display names or positions, are persisted to the browser.
   const leagueIds=SPORTS.map(s=>s.id);

@@ -222,7 +222,7 @@
   });
   teamPanel.addEventListener('click',e=>{
     const button=e.target.closest('[data-team-page-favorite]');if(!button)return;
-    const [league,id]=button.dataset.teamPageFavorite.split(':');toggleTeamFavorite(league,id);
+    const [league,id]=button.dataset.teamPageFavorite.split(':');toggleTeamFavorite(league,id,{name:teamMode?.name,logo:teamMode?.logo});
   });
   teamPanel.addEventListener('change',e=>{
     const season=e.target.closest('[data-team-season]');if(!season||!teamMode)return;

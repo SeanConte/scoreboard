@@ -80,7 +80,7 @@ def run(width,height):
         assert dialog.locator('.monitor-player-periods').count()==0
         if width==390:
             page.touchscreen.tap(pos['x']+point_x*pos['width'],pos['y']+pos['height']*.52)
-            assert svg.get_attribute('data-chart-pinned')=='true'
+            assert svg.get_attribute('data-chart-pinned')=='false', 'second tap must dismiss a pinned inspection'
         if width==1280:page.screenshot(path='/mnt/data/scoreboard24_overview.png')
         if width==390:page.screenshot(path='/mnt/data/scoreboard24_mobile.png')
         assert not errors,errors
